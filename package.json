@@ -1,0 +1,13 @@
+{
+  "name": "waluma",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/api"
+  ],
+  "scripts": {
+    "web": "npm run dev --workspace=apps/web",
+    "api": "npm run dev --workspace=apps/api"
+  }
+}
