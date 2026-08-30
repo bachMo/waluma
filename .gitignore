@@ -30,3 +30,10 @@ CLAUDE.md
 # Next.js
 apps/web/.next/
 apps/web/node_modules/
+
+# Expo
+apps/mobile/node_modules/
+apps/mobile/.expo/
+apps/mobile/dist/
+apps/mobile/android/
+apps/mobile/ios/
