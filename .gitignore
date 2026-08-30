@@ -22,3 +22,11 @@ Thumbs.db
 
 # Prisma
 apps/api/prisma/migrations/
+
+# AI editor files
+AGENTS.md
+CLAUDE.md
+
+# Next.js
+apps/web/.next/
+apps/web/node_modules/
