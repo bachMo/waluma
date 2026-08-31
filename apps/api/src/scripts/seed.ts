@@ -1,7 +1,7 @@
 import { prisma } from "../prisma/client";
 
 async function main() {
-  // Créer un patient test
+  // Patient test
   const patient = await prisma.user.upsert({
     where: { telephone: "+221770000001" },
     update: {},
@@ -13,7 +13,7 @@ async function main() {
     },
   });
 
-  // Créer un admin test
+  // Admin test
   const admin = await prisma.user.upsert({
     where: { telephone: "+221770000099" },
     update: {},
@@ -26,7 +26,38 @@ async function main() {
     },
   });
 
-  console.log("✅ Seed OK :", { patient: patient.telephone, admin: admin.telephone });
+  // Praticien test
+  const praticienUser = await prisma.user.upsert({
+    where: { telephone: "+221770000002" },
+    update: {},
+    create: {
+      telephone: "+221770000002",
+      nom: "Diallo",
+      prenom: "Aminata",
+      role: "PRATICIEN",
+      praticien: {
+        create: {
+          numeroOrdre: "INF-SN-2018-04821",
+          anneesExperience: 8,
+          bio: "Infirmière diplômée d'État avec 8 ans d'expérience à Dakar.",
+          zoneIntervention: ["Almadies", "Mermoz", "Plateau"],
+          statutCompte: "VALIDE",
+          disponible: true,
+          operateurMM: "WAVE",
+          numeroMM: "+221770000002",
+          specialites: {
+            create: [{ specialite: "INFIRMIER", principale: true }],
+          },
+        },
+      },
+    },
+  });
+
+  console.log("✅ Seed OK :", {
+    patient: patient.telephone,
+    admin: admin.telephone,
+    praticien: praticienUser.telephone,
+  });
 }
 
 main()
