@@ -6,3 +6,424 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+// ─────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────
+
+enum Role {
+  PATIENT
+  PRATICIEN
+  ADMIN
+}
+
+enum Specialite {
+  INFIRMIER
+  MEDECIN_GENERALISTE
+  SAGE_FEMME
+  KINESITHERAPEUTE
+  PRELEVEUR
+  PEDIATRE
+  AUTRE
+}
+
+enum StatutPraticien {
+  EN_ATTENTE
+  VALIDE
+  SUSPENDU
+  REFUSE
+}
+
+enum StatutMission {
+  EN_ATTENTE        // demande créée, pas encore de praticien
+  ACCEPTEE          // praticien a accepté
+  EN_ROUTE          // praticien en déplacement
+  ARRIVE            // praticien arrivé chez le patient
+  EN_COURS          // soin en cours
+  TERMINEE          // soin terminé, CR soumis
+  ANNULEE           // annulée par patient ou praticien
+  EXPIREE           // aucun praticien trouvé dans le délai
+}
+
+enum TypeMission {
+  IMMEDIATE         // demande immédiate
+  PLANIFIEE         // rendez-vous planifié
+}
+
+enum StatutPaiement {
+  EN_ATTENTE
+  CAPTURE           // montant réservé
+  PAYE
+  REMBOURSE
+  ECHOUE
+}
+
+enum OperateurMobileMoney {
+  WAVE
+  ORANGE_MONEY
+  FREE_MONEY
+}
+
+enum TypeDocument {
+  DIPLOME
+  ORDRE_PROFESSIONNEL
+  CNI
+  CASIER_JUDICIAIRE
+  AUTRE
+}
+
+enum StatutDocument {
+  EN_ATTENTE
+  VALIDE
+  REFUSE
+}
+
+enum StatutLitige {
+  OUVERT
+  EN_TRAITEMENT
+  RESOLU
+  CLOS
+}
+
+enum TypeNotification {
+  MISSION_NOUVELLE
+  MISSION_ACCEPTEE
+  MISSION_EN_ROUTE
+  MISSION_ARRIVE
+  MISSION_TERMINEE
+  MISSION_ANNULEE
+  PAIEMENT_CONFIRME
+  LITIGE_OUVERT
+  COMPTE_VALIDE
+  COMPTE_SUSPENDU
+  AUTRE
+}
+
+enum CanalNotification {
+  WHATSAPP
+  PUSH
+  EMAIL
+}
+
+// ─────────────────────────────────────────
+// UTILISATEURS
+// ─────────────────────────────────────────
+
+model User {
+  id          String   @id @default(cuid())
+  telephone   String   @unique
+  nom         String
+  prenom      String
+  role        Role     @default(PATIENT)
+  actif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations patient
+  adresses    Adresse[]
+  missions    Mission[]        @relation("PatientMissions")
+  paiements   Paiement[]
+  avisPatient Avis[]           @relation("PatientAvis")
+
+  // Relations praticien
+  praticien   Praticien?
+
+  // Relations admin
+  admin       Admin?
+
+  // Notifications
+  notifications Notification[]
+
+  @@map("users")
+}
+
+model Praticien {
+  id                String          @id @default(cuid())
+  userId            String          @unique
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  numeroOrdre       String?
+  anneesExperience  Int             @default(0)
+  bio               String?
+  zoneIntervention  String[]        // ex: ["Almadies", "Mermoz", "Plateau"]
+  disponible        Boolean         @default(false)
+  statutCompte      StatutPraticien @default(EN_ATTENTE)
+
+  // Paiement
+  operateurMM       OperateurMobileMoney?
+  numeroMM          String?
+  commission        Float           @default(10.0) // pourcentage
+
+  // Géolocalisation temps réel
+  latitudeActuelle  Float?
+  longitudeActuelle Float?
+  dernierePosition  DateTime?
+
+  // Statistiques
+  totalMissions     Int             @default(0)
+  noteMoyenne       Float?
+  tauxAcceptation   Float?
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  // Relations
+  specialites       PraticienSpecialite[]
+  documents         Document[]
+  missions          Mission[]       @relation("PraticienMissions")
+  avisRecus         Avis[]          @relation("PraticienAvis")
+
+  @@map("praticiens")
+}
+
+model PraticienSpecialite {
+  id          String     @id @default(cuid())
+  praticienId String
+  praticien   Praticien  @relation(fields: [praticienId], references: [id], onDelete: Cascade)
+  specialite  Specialite
+  principale  Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+
+  @@unique([praticienId, specialite])
+  @@map("praticien_specialites")
+}
+
+model Admin {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  superAdmin Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admins")
+}
+
+// ─────────────────────────────────────────
+// ADRESSES
+// ─────────────────────────────────────────
+
+model Adresse {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  label       String   // ex: "Domicile", "Bureau"
+  adresse     String
+  quartier    String
+  ville       String   @default("Dakar")
+  latitude    Float?
+  longitude   Float?
+  principale  Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  missions    Mission[]
+
+  @@map("adresses")
+}
+
+// ─────────────────────────────────────────
+// MISSIONS
+// ─────────────────────────────────────────
+
+model Mission {
+  id            String        @id @default(cuid())
+  reference     String        @unique @default(cuid())
+
+  // Parties
+  patientId     String
+  patient       User          @relation("PatientMissions", fields: [patientId], references: [id])
+  praticienId   String?
+  praticien     Praticien?    @relation("PraticienMissions", fields: [praticienId], references: [id])
+
+  // Type et spécialité
+  type          TypeMission   @default(IMMEDIATE)
+  specialite    Specialite
+  statut        StatutMission @default(EN_ATTENTE)
+
+  // Adresse
+  adresseId     String?
+  adresse       Adresse?      @relation(fields: [adresseId], references: [id])
+  adresseTexte  String        // copie textuelle au moment de la création
+  latitude      Float?
+  longitude     Float?
+
+  // Planification
+  dateHeureSoin DateTime?     // pour missions planifiées
+
+  // Détails
+  notePatient   String?       // note pour le praticien à l'arrivée
+  urgence       Boolean       @default(false)
+
+  // Tarification
+  montantBase   Float
+  fraisDeplacement Float      @default(2500)
+  montantTotal  Float
+
+  // Timestamps mission
+  accepteeAt    DateTime?
+  enRouteAt     DateTime?
+  arriveeAt     DateTime?
+  debutSoinAt   DateTime?
+  finSoinAt     DateTime?
+  annuleeAt     DateTime?
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  compteRendu   CompteRendu?
+  paiement      Paiement?
+  avis          Avis?
+  litige        Litige?
+
+  @@map("missions")
+}
+
+// ─────────────────────────────────────────
+// COMPTE RENDU
+// ─────────────────────────────────────────
+
+model CompteRendu {
+  id          String   @id @default(cuid())
+  missionId   String   @unique
+  mission     Mission  @relation(fields: [missionId], references: [id], onDelete: Cascade)
+
+  acteRealise String
+  description String
+  // Constantes vitales (facultatives)
+  tension     String?
+  temperature Float?
+  pouls       Int?
+  spo2        Int?
+
+  recommandations  String?
+  suiteNecessaire  String?
+  photoUrls        String[] // URLs Cloudflare R2
+
+  signaturePatientUrl String?
+  soumisAt        DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("comptes_rendus")
+}
+
+// ─────────────────────────────────────────
+// PAIEMENTS
+// ─────────────────────────────────────────
+
+model Paiement {
+  id            String               @id @default(cuid())
+  missionId     String               @unique
+  mission       Mission              @relation(fields: [missionId], references: [id])
+  userId        String
+  user          User                 @relation(fields: [userId], references: [id])
+
+  montant       Float
+  operateur     OperateurMobileMoney
+  numeroPayeur  String
+  statut        StatutPaiement       @default(EN_ATTENTE)
+
+  // Référence transaction opérateur
+  referenceExterne String?
+  // Virement praticien
+  virementEffectue Boolean           @default(false)
+  virementAt      DateTime?
+  montantVirement Float?             // montant net après commission
+
+  payeAt          DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@map("paiements")
+}
+
+// ─────────────────────────────────────────
+// AVIS
+// ─────────────────────────────────────────
+
+model Avis {
+  id          String    @id @default(cuid())
+  missionId   String    @unique
+  mission     Mission   @relation(fields: [missionId], references: [id])
+  patientId   String
+  patient     User      @relation("PatientAvis", fields: [patientId], references: [id])
+  praticienId String
+  praticien   Praticien @relation("PraticienAvis", fields: [praticienId], references: [id])
+
+  note        Int       // 1 à 5
+  commentaire String?
+  tags        String[]  // ex: ["Ponctualité", "Professionnalisme"]
+
+  createdAt   DateTime  @default(now())
+
+  @@map("avis")
+}
+
+// ─────────────────────────────────────────
+// DOCUMENTS PRATICIEN
+// ─────────────────────────────────────────
+
+model Document {
+  id          String         @id @default(cuid())
+  praticienId String
+  praticien   Praticien      @relation(fields: [praticienId], references: [id], onDelete: Cascade)
+
+  type        TypeDocument
+  statut      StatutDocument @default(EN_ATTENTE)
+  url         String         // URL Cloudflare R2
+  nom         String         // nom du fichier original
+
+  commentaireAdmin String?   // motif de refus éventuel
+  valideAt    DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────
+// LITIGES
+// ─────────────────────────────────────────
+
+model Litige {
+  id          String       @id @default(cuid())
+  missionId   String       @unique
+  mission     Mission      @relation(fields: [missionId], references: [id])
+
+  statut      StatutLitige @default(OUVERT)
+  motif       String
+  description String?
+  resolution  String?
+
+  ouvertAt    DateTime     @default(now())
+  resoluAt    DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("litiges")
+}
+
+// ─────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────
+
+model Notification {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  type      TypeNotification
+  canal     CanalNotification
+  titre     String
+  message   String
+  lu        Boolean            @default(false)
+  metadata  Json?              // données supplémentaires (ex: missionId)
+
+  createdAt DateTime           @default(now())
+
+  @@map("notifications")
+}
