@@ -194,3 +194,54 @@ export async function deleteDocument(req: Request, res: Response): Promise<void>
 
   res.json({ message: "Document supprimé" });
 }
+
+// POST /api/praticiens/creer — créer un praticien (admin)
+export async function creerPraticien(req: Request, res: Response): Promise<void> {
+  const {
+    prenom, nom, telephone, specialite,
+    numeroOrdre, anneesExperience, bio,
+    zoneIntervention, commission,
+    operateurMM, numeroMM,
+  } = req.body
+
+  if (!prenom || !nom || !telephone || !specialite) {
+    res.status(400).json({ error: 'Champs obligatoires manquants' })
+    return
+  }
+
+  const existing = await prisma.user.findUnique({ where: { telephone } })
+  if (existing) {
+    res.status(400).json({ error: 'Un compte avec ce numéro existe déjà' })
+    return
+  }
+
+  const user = await prisma.user.create({
+    data: {
+      telephone,
+      nom,
+      prenom,
+      role: 'PRATICIEN',
+      praticien: {
+        create: {
+          numeroOrdre,
+          anneesExperience: anneesExperience || 0,
+          bio,
+          zoneIntervention: zoneIntervention || [],
+          statutCompte: 'EN_ATTENTE',
+          disponible: false,
+          commission: commission || 10,
+          operateurMM,
+          numeroMM,
+          specialites: {
+            create: [{ specialite, principale: true }],
+          },
+        },
+      },
+    },
+    include: { praticien: true },
+  })
+
+  // TODO : envoyer SMS avec identifiants temporaires
+
+  res.status(201).json({ message: 'Praticien créé', user })
+}

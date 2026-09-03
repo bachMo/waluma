@@ -10,9 +10,11 @@ import {
 } from "../controllers/praticien.controller";
 import { authenticate, requireRole } from "../middlewares/auth.middleware";
 import { upload } from "../middlewares/upload.middleware";
+import { creerPraticien } from '../controllers/praticien.controller'
 
 const router = Router();
 
+router.post('/creer', authenticate, requireRole('ADMIN'), creerPraticien)
 // Admin
 router.get("/", authenticate, requireRole("ADMIN"), listPraticiens);
 router.patch("/:id/statut", authenticate, requireRole("ADMIN"), updateStatutPraticien);
