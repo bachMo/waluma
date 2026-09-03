@@ -442,3 +442,16 @@ model Article {
 
   @@map("articles")
 }
+
+model Parametre {
+  id        String   @id @default(cuid())
+  cle       String   @unique
+  valeur    String
+  type      String   @default("number") // number, boolean, string
+  categorie String   // tarifs, matching, notifications, securite
+  label     String
+  description String?
+  updatedAt DateTime @updatedAt
+
+  @@map("parametres")
+}
