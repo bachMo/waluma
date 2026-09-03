@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes";
 import praticienRoutes from "./routes/praticien.routes";
+import missionRoutes from "./routes/mission.routes"
 
 dotenv.config();
 
@@ -15,6 +16,7 @@ app.use(express.json());
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/praticiens", praticienRoutes);
+app.use("/api/missions", missionRoutes)
 
 // Health check
 app.get("/health", (_req, res) => {
