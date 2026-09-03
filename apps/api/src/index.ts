@@ -7,6 +7,7 @@ import missionRoutes from "./routes/mission.routes"
 import articleRoutes from "./routes/article.routes"
 import parametreRoutes from "./routes/parametre.routes"
 import litigeRoutes from "./routes/litige.routes"
+import statsRoutes from "./routes/stats.routes"
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.use("/api/missions", missionRoutes)
 app.use("/api/articles", articleRoutes)
 app.use("/api/parametres", parametreRoutes)
 app.use("/api/litiges", litigeRoutes)
+app.use("/api/stats", statsRoutes)
 
 // Health check
 app.get("/health", (_req, res) => {
