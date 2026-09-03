@@ -427,3 +427,18 @@ model Notification {
 
   @@map("notifications")
 }
+
+model Article {
+  id          String   @id @default(cuid())
+  titre       String
+  contenu     String
+  categorie   String
+  auteur      String
+  statut      String   @default("brouillon")
+  imageUrl    String?
+  vues        Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("articles")
+}

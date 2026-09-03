@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import authRoutes from "./routes/auth.routes";
 import praticienRoutes from "./routes/praticien.routes";
 import missionRoutes from "./routes/mission.routes"
+import articleRoutes from "./routes/article.routes"
 
 dotenv.config();
 
@@ -17,6 +18,7 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/praticiens", praticienRoutes);
 app.use("/api/missions", missionRoutes)
+app.use("/api/articles", articleRoutes)
 
 // Health check
 app.get("/health", (_req, res) => {
