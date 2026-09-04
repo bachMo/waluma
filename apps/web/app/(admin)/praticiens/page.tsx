@@ -231,6 +231,12 @@ export default function PraticiensPage() {
                           Réactiver
                         </button>
                       )}
+                      <Link
+  href={`/praticiens/${p.id}`}
+  className="text-[11px] font-bold bg-[#e0f2fe] text-[#0d5068] border border-[#0d5068]/20 rounded-lg px-2 py-1 hover:bg-[#cfe8f5] transition"
+>
+  Voir
+</Link>
                     </div>
                   </td>
                 </tr>

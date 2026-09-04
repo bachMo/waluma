@@ -1,6 +1,7 @@
 import { Request, Response } from 'express'
 import { prisma } from '../prisma/client'
 import { AuthRequest } from '../middlewares/auth.middleware'
+import { uploadFile } from '../services/r2.service'
 
 // GET /api/articles — liste publique
 export async function listArticles(req: Request, res: Response): Promise<void> {
@@ -120,4 +121,22 @@ export async function deleteArticle(req: AuthRequest, res: Response): Promise<vo
 
   await prisma.article.delete({ where: { id } })
   res.json({ message: 'Article supprimé' })
+}
+
+// POST /api/articles/upload-image — upload image de couverture
+export async function uploadImageArticle(req: AuthRequest, res: Response): Promise<void> {
+  const file = req.file
+  if (!file) {
+    res.status(400).json({ error: 'Fichier requis' })
+    return
+  }
+
+  const url = await uploadFile(
+    file.buffer,
+    file.originalname,
+    file.mimetype,
+    'articles/images'
+  )
+
+  res.json({ url })
 }

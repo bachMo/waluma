@@ -245,3 +245,53 @@ export async function creerPraticien(req: Request, res: Response): Promise<void>
 
   res.status(201).json({ message: 'Praticien créé', user })
 }
+
+// PATCH /api/praticiens/:id/infos — modifier les infos (admin)
+export async function updateInfosPraticien(req: Request, res: Response): Promise<void> {
+  const { id } = req.params
+  const {
+    nom, prenom, telephone,
+    numeroOrdre, anneesExperience, bio,
+    zoneIntervention, commission,
+    operateurMM, numeroMM,
+  } = req.body
+
+  const praticien = await prisma.praticien.findUnique({ where: { id } })
+  if (!praticien) {
+    res.status(404).json({ error: 'Praticien introuvable' })
+    return
+  }
+
+  // Mettre à jour les infos du user si nécessaire
+  if (nom || prenom || telephone) {
+    await prisma.user.update({
+      where: { id: praticien.userId },
+      data: {
+        ...(nom && { nom }),
+        ...(prenom && { prenom }),
+        ...(telephone && { telephone }),
+      },
+    })
+  }
+
+  // Mettre à jour les infos du praticien
+  const updated = await prisma.praticien.update({
+    where: { id },
+    data: {
+      ...(numeroOrdre !== undefined && { numeroOrdre }),
+      ...(anneesExperience !== undefined && { anneesExperience }),
+      ...(bio !== undefined && { bio }),
+      ...(zoneIntervention !== undefined && { zoneIntervention }),
+      ...(commission !== undefined && { commission }),
+      ...(operateurMM !== undefined && { operateurMM }),
+      ...(numeroMM !== undefined && { numeroMM }),
+    },
+    include: {
+      user: { select: { nom: true, prenom: true, telephone: true } },
+      specialites: true,
+      documents: true,
+    },
+  })
+
+  res.json(updated)
+}
