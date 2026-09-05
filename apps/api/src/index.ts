@@ -11,6 +11,7 @@ import parametreRoutes from './routes/parametre.routes'
 import litigeRoutes from './routes/litige.routes'
 import statsRoutes from './routes/stats.routes'
 import notificationRoutes from './routes/notification.routes'
+import paiementRoutes from "./routes/paiement.routes"
 
 dotenv.config()
 
@@ -35,6 +36,7 @@ app.use('/api/parametres', parametreRoutes)
 app.use('/api/litiges', litigeRoutes)
 app.use('/api/stats', statsRoutes)
 app.use('/api/notifications', notificationRoutes)
+app.use("/api/paiements", paiementRoutes)
 
 const PORT = process.env.PORT || 5001
 httpServer.listen(PORT, () => {

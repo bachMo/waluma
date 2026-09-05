@@ -323,7 +323,7 @@ model Paiement {
   mission       Mission              @relation(fields: [missionId], references: [id])
   userId        String
   user          User                 @relation(fields: [userId], references: [id])
-
+  numeroMM  String?
   montant       Float
   operateur     OperateurMobileMoney
   numeroPayeur  String
