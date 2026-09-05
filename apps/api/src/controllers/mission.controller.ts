@@ -3,6 +3,7 @@ import { prisma } from '../prisma/client'
 import { AuthRequest } from '../middlewares/auth.middleware'
 import { findBestPraticien } from '../services/matching.service'
 import { sendToUsers } from '../services/push.service'
+import { emitToMission, emitToUser } from '../services/socket.service'
 
 // POST /api/missions — créer une demande de soin (patient)
 export async function creerMission(req: AuthRequest, res: Response): Promise<void> {
@@ -207,6 +208,9 @@ export async function updateStatutMission(req: AuthRequest, res: Response): Prom
   }
 
   res.json(mission)
+  // Émettre en temps réel
+emitToMission(id, 'mission:statut', { missionId: id, statut, updatedAt: new Date() })
+emitToUser(mission.patientId, 'mission:update', { missionId: id, statut })
 }
 
 // PATCH /api/missions/:id/assigner — assigner manuellement un praticien (admin)

@@ -1,90 +1,135 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, StatusBar, Switch,
-  ActivityIndicator, Alert, RefreshControl
+  StyleSheet, SafeAreaView, Alert, ActivityIndicator,
+  StatusBar, Linking
 } from 'react-native'
-import { router } from 'expo-router'
-import { useState, useEffect, useCallback } from 'react'
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { router, useLocalSearchParams } from 'expo-router'
+import { useState, useEffect, useRef } from 'react'
+import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
-import { getUser } from '@/lib/auth'
+import * as Location from 'expo-location'
 import api from '@/lib/api'
-
-interface PraticienData {
-  id: string
-  disponible: boolean
-  statutCompte: string
-  totalMissions: number
-  noteMoyenne: number | null
-  specialites: { specialite: string; principale: boolean }[]
-}
+import { connectSocket, emitPosition } from '@/lib/socket'
 
 interface Mission {
   id: string
   statut: string
   specialite: string
   adresseTexte: string
+  latitude: number | null
+  longitude: number | null
   montantTotal: number
+  montantBase: number
+  fraisDeplacement: number
   urgence: boolean
-  patient: { nom: string; prenom: string }
+  notePatient: string | null
   createdAt: string
+  patient: { nom: string; prenom: string; telephone: string }
 }
 
 const SPEC_LABEL: Record<string, string> = {
-  INFIRMIER: 'Infirmier·ère IDE',
-  MEDECIN_GENERALISTE: 'Médecin généraliste',
-  SAGE_FEMME: 'Sage-femme',
-  KINESITHERAPEUTE: 'Kinésithérapeute',
-  PRELEVEUR: 'Préleveur·se',
-  PEDIATRE: 'Pédiatre',
-  AUTRE: 'Autre',
+  INFIRMIER: 'Soins infirmiers', MEDECIN_GENERALISTE: 'Médecin généraliste',
+  SAGE_FEMME: 'Sage-femme', KINESITHERAPEUTE: 'Kinésithérapie',
+  PRELEVEUR: 'Prélèvement', PEDIATRE: 'Pédiatre', AUTRE: 'Autre',
 }
 
-export default function PraticienDashboard() {
-  const [userName, setUserName] = useState('')
-  const [praticien, setPraticien] = useState<PraticienData | null>(null)
-  const [missions, setMissions] = useState<Mission[]>([])
+const STATUT_STEPS: { statut: string; label: string; action: string; color: string; next: string }[] = [
+  { statut: 'ACCEPTEE', label: 'Démarrer le trajet', action: 'EN_ROUTE', color: '#7c3aed', next: 'Praticien trouvé' },
+  { statut: 'EN_ROUTE', label: 'Je suis arrivé', action: 'ARRIVE', color: '#0891b2', next: 'En route vers vous' },
+  { statut: 'ARRIVE', label: 'Commencer le soin', action: 'EN_COURS', color: '#0d5068', next: 'Arrivé chez vous' },
+  { statut: 'EN_COURS', label: 'Terminer et rédiger le CR', action: 'TERMINEE', color: '#22c55e', next: 'Soin en cours' },
+]
+
+export default function MissionScreen() {
+  const { missionId } = useLocalSearchParams<{ missionId: string }>()
+  const [mission, setMission] = useState<Mission | null>(null)
   const [loading, setLoading] = useState(true)
-  const [toggling, setToggling] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
+  const [actionLoading, setActionLoading] = useState(false)
+  const locationSubRef = useRef<Location.LocationSubscription | null>(null)
 
   async function load() {
     try {
-      const user = await getUser()
-      if (!user) { router.replace('/(auth)'); return }
-      setUserName(user.prenom)
-
-      const [praticienRes, missionsRes] = await Promise.all([
-        api.get('/praticiens/me'),
-        api.get('/missions?limit=10'),
-      ])
-      setPraticien(praticienRes.data)
-      setMissions(missionsRes.data.missions)
-    } catch {} finally {
+      const { data } = await api.get(`/missions/${missionId}`)
+      setMission(data)
+    } catch {
+      Alert.alert('Erreur', 'Mission introuvable')
+      router.back()
+    } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }
 
-  useEffect(() => { load() }, [])
-  const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
+  useEffect(() => {
+    load()
+    const interval = setInterval(load, 15000)
 
-  async function toggleDisponibilite() {
-    if (!praticien) return
-    if (praticien.statutCompte !== 'VALIDE') {
-      Alert.alert('Compte non validé', 'Votre compte doit être validé par un administrateur avant de pouvoir accepter des missions.')
+    // Socket et géolocalisation
+    async function initSocketAndLocation() {
+      try {
+        await connectSocket()
+
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        if (status === 'granted' && missionId) {
+          const sub = await Location.watchPositionAsync(
+            { accuracy: Location.Accuracy.High, timeInterval: 10000, distanceInterval: 10 },
+            (loc) => {
+              emitPosition(missionId, loc.coords.latitude, loc.coords.longitude)
+            }
+          )
+          locationSubRef.current = sub
+        }
+      } catch (e) {
+        console.error('Socket/location error:', e)
+      }
+    }
+
+    initSocketAndLocation()
+
+    return () => {
+      clearInterval(interval)
+      locationSubRef.current?.remove()
+    }
+  }, [missionId])
+
+  async function handleAction(newStatut: string) {
+    if (newStatut === 'TERMINEE') {
+      router.push({ pathname: '/(praticien)/compte-rendu', params: { missionId: missionId } })
       return
     }
-    setToggling(true)
+    setActionLoading(true)
     try {
-      await api.patch(`/praticiens/${praticien.id}/disponibilite`)
-      setPraticien(p => p ? { ...p, disponible: !p.disponible } : p)
+      await api.patch(`/missions/${missionId}/statut`, { statut: newStatut })
+      await load()
+    } catch {
+      Alert.alert('Erreur', 'Impossible de mettre à jour le statut')
     } finally {
-      setToggling(false)
+      setActionLoading(false)
     }
   }
 
-  const missionActive = missions.find(m => ['ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'].includes(m.statut))
+  function openMaps() {
+    if (!mission) return
+    const addr = encodeURIComponent(mission.adresseTexte + ', Dakar, Sénégal')
+    Linking.openURL(`https://maps.google.com/?q=${addr}`)
+  }
+
+  function callPatient() {
+    if (!mission) return
+    Linking.openURL(`tel:${mission.patient.telephone}`)
+  }
+
+  const currentStep = STATUT_STEPS.find(s => s.statut === mission?.statut)
+  const stepIndex = STATUT_STEPS.findIndex(s => s.statut === mission?.statut)
+
+  if (loading) {
+    return (
+      <View style={s.center}>
+        <ActivityIndicator color="#0d5068" size="large" />
+      </View>
+    )
+  }
+
+  if (!mission) return null
 
   return (
     <View style={s.root}>
@@ -92,211 +137,206 @@ export default function PraticienDashboard() {
       <LinearGradient colors={['#0d5068', '#083d50']} style={s.headerGrad}>
         <SafeAreaView>
           <View style={s.header}>
-            <View style={s.headerTop}>
-              <View>
-                <Text style={s.headerGreeting}>Bonjour 👋</Text>
-                <Text style={s.headerName}>{userName || '...'}</Text>
-                {praticien && (
-                  <Text style={s.headerSpec}>
-                    {SPEC_LABEL[praticien.specialites.find(s => s.principale)?.specialite ?? ''] ?? ''}
-                  </Text>
-                )}
+            <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
+              <Ionicons name="chevron-back" size={22} color="#fff" />
+            </TouchableOpacity>
+            <Text style={s.headerTitle}>Mission en cours</Text>
+            {mission.urgence && (
+              <View style={s.urgentBadge}>
+                <Text style={s.urgentText}>URGENT</Text>
               </View>
-              <TouchableOpacity
-                style={s.notifBtn}
-                onPress={() => router.push('/(praticien)/profil')}
-              >
-                <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.8)" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Toggle disponibilité */}
-            <View style={[s.disponCard, praticien?.disponible && s.disponCardOn]}>
-              <View style={s.disponLeft}>
-                <View style={[s.disponDot, praticien?.disponible && s.disponDotOn]} />
-                <View>
-                  <Text style={s.disponTitle}>
-                    {praticien?.disponible ? 'Disponible' : 'Indisponible'}
-                  </Text>
-                  <Text style={s.disponSub}>
-                    {praticien?.disponible
-                      ? 'Vous recevrez des demandes de soin'
-                      : 'Activez pour recevoir des missions'}
-                  </Text>
-                </View>
-              </View>
-              {toggling
-                ? <ActivityIndicator color={praticien?.disponible ? '#22c55e' : '#888780'} />
-                : <Switch
-                    value={praticien?.disponible ?? false}
-                    onValueChange={toggleDisponibilite}
-                    trackColor={{ false: 'rgba(255,255,255,0.15)', true: '#22c55e' }}
-                    thumbColor="#fff"
-                  />
-              }
-            </View>
+            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
 
-      <ScrollView
-        style={s.body}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d5068" />}
-      >
-        {/* Mission active */}
-        {missionActive && (
-          <TouchableOpacity
-            style={s.activeMission}
-            onPress={() => router.push({ pathname: '/(praticien)/mission', params: { missionId: missionActive.id } })}
-            activeOpacity={0.88}
-          >
-            <LinearGradient colors={['#22c55e', '#16a34a']} style={s.activeMissionGrad}>
-              <View style={s.activeMissionTop}>
-                <View style={s.activePulse}>
-                  <View style={s.activeDot} />
-                </View>
-                <Text style={s.activeMissionLabel}>Mission en cours</Text>
-                <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
-              </View>
-              <Text style={s.activeMissionSpec}>
-                {SPEC_LABEL[missionActive.specialite]} · {missionActive.patient.prenom} {missionActive.patient.nom}
-              </Text>
-              <Text style={s.activeMissionAddr} numberOfLines={1}>{missionActive.adresseTexte}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        )}
+      <ScrollView style={s.body} showsVerticalScrollIndicator={false}>
 
-        {/* Stats */}
-        {praticien && (
-          <View style={s.statsRow}>
-            {[
-              { label: 'Missions', value: praticien.totalMissions.toString(), icon: 'checkmark-circle', color: '#22c55e' },
-              { label: 'Note', value: praticien.noteMoyenne ? `${praticien.noteMoyenne.toFixed(1)} ★` : '—', icon: 'star', color: '#f59e0b' },
-              { label: 'Statut', value: praticien.statutCompte === 'VALIDE' ? 'Validé' : 'En attente', icon: 'shield-checkmark', color: praticien.statutCompte === 'VALIDE' ? '#22c55e' : '#d97706' },
-            ].map(stat => (
-              <View key={stat.label} style={s.statCard}>
-                <Ionicons name={stat.icon as never} size={22} color={stat.color} style={{ marginBottom: 8 }} />
-                <Text style={s.statValue}>{stat.value}</Text>
-                <Text style={s.statLabel}>{stat.label}</Text>
-              </View>
-            ))}
+        {/* Patient card */}
+        <View style={s.patientCard}>
+          <LinearGradient colors={['#e0f2fe', '#f0fdf4']} style={s.patientAvatar}>
+            <Text style={s.patientAvatarText}>
+              {mission.patient.prenom[0]}{mission.patient.nom[0]}
+            </Text>
+          </LinearGradient>
+          <View style={s.patientInfo}>
+            <Text style={s.patientName}>{mission.patient.prenom} {mission.patient.nom}</Text>
+            <Text style={s.patientSpec}>{SPEC_LABEL[mission.specialite]}</Text>
+            <Text style={s.patientAddr} numberOfLines={2}>{mission.adresseTexte}</Text>
+          </View>
+          <View style={s.patientActions}>
+            <TouchableOpacity style={s.actionBtn} onPress={callPatient}>
+              <Ionicons name="call" size={20} color="#0d5068" />
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.actionBtn, s.actionBtnGreen]} onPress={openMaps}>
+              <Ionicons name="navigate" size={20} color="#22c55e" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Note du patient */}
+        {mission.notePatient && (
+          <View style={s.noteCard}>
+            <View style={s.noteHeader}>
+              <Ionicons name="information-circle-outline" size={18} color="#0d5068" />
+              <Text style={s.noteTitle}>Note du patient</Text>
+            </View>
+            <Text style={s.noteText}>{mission.notePatient}</Text>
           </View>
         )}
 
-        {/* Missions récentes */}
+        {/* Progression */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>Dernières missions</Text>
-          {loading ? (
-            <ActivityIndicator color="#0d5068" style={{ marginTop: 20 }} />
-          ) : missions.length === 0 ? (
-            <View style={s.emptyCard}>
-              <MaterialCommunityIcons name="needle" size={36} color="#d1d0c9" />
-              <Text style={s.emptyText}>Aucune mission pour l'instant</Text>
-              <Text style={s.emptySub}>Activez votre disponibilité pour recevoir des demandes</Text>
-            </View>
-          ) : (
-            missions.slice(0, 5).map(m => (
-              <TouchableOpacity
-                key={m.id}
-                style={s.missionCard}
-                onPress={() => router.push({ pathname: '/(praticien)/mission', params: { missionId: m.id } })}
-                activeOpacity={0.85}
-              >
-                <View style={[s.missionIcon, m.urgence && s.missionIconUrgent]}>
-                  <MaterialCommunityIcons
-                    name="needle"
-                    size={20}
-                    color={m.urgence ? '#dc2626' : '#0d5068'}
-                  />
-                </View>
-                <View style={s.missionInfo}>
-                  <View style={s.missionTop}>
-                    <Text style={s.missionSpec}>{SPEC_LABEL[m.specialite]}</Text>
-                    {m.urgence && (
-                      <View style={s.urgentBadge}>
-                        <Text style={s.urgentText}>URGENT</Text>
-                      </View>
+          <Text style={s.sectionTitle}>Progression de la mission</Text>
+          <View style={s.timeline}>
+            {STATUT_STEPS.map((step, i) => {
+              const isDone = i < stepIndex
+              const isActive = i === stepIndex
+              return (
+                <View key={step.statut} style={s.timelineRow}>
+                  <View style={s.timelineLeft}>
+                    <View style={[
+                      s.timelineDot,
+                      isDone && s.timelineDotDone,
+                      isActive && { backgroundColor: step.color, borderColor: step.color },
+                    ]}>
+                      {isDone && <Ionicons name="checkmark" size={12} color="#fff" />}
+                      {isActive && <View style={s.timelineDotInner} />}
+                    </View>
+                    {i < STATUT_STEPS.length - 1 && (
+                      <View style={[s.timelineLine, isDone && s.timelineLineDone]} />
                     )}
                   </View>
-                  <Text style={s.missionPatient}>{m.patient.prenom} {m.patient.nom}</Text>
-                  <Text style={s.missionAddr} numberOfLines={1}>{m.adresseTexte}</Text>
+                  <View style={s.timelineContent}>
+                    <Text style={[
+                      s.timelineLabel,
+                      isDone && s.timelineLabelDone,
+                      isActive && { color: '#1a1a18', fontWeight: '700' },
+                    ]}>
+                      {step.next}
+                    </Text>
+                  </View>
                 </View>
-                <View style={s.missionRight}>
-                  <Text style={s.missionMontant}>{m.montantTotal.toLocaleString()} F</Text>
-                  <Text style={s.missionDate}>
-                    {new Date(m.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
+              )
+            })}
+          </View>
         </View>
 
-        <View style={{ height: 32 }} />
+        {/* Récapitulatif financier */}
+        <View style={s.financeCard}>
+          <Text style={s.financeTitle}>Votre gain pour cette mission</Text>
+          <View style={s.financeRow}>
+            <Text style={s.financeLabel}>Soin</Text>
+            <Text style={s.financeVal}>{mission.montantBase.toLocaleString()} F</Text>
+          </View>
+          <View style={s.financeRow}>
+            <Text style={s.financeLabel}>Déplacement</Text>
+            <Text style={s.financeVal}>{mission.fraisDeplacement.toLocaleString()} F</Text>
+          </View>
+          <View style={s.financeRow}>
+            <Text style={s.financeLabel}>Commission Waluma (10%)</Text>
+            <Text style={[s.financeVal, { color: '#dc2626' }]}>
+              -{Math.round(mission.montantTotal * 0.1).toLocaleString()} F
+            </Text>
+          </View>
+          <View style={[s.financeRow, s.financeTotalRow]}>
+            <Text style={s.financeTotalLabel}>Votre gain net</Text>
+            <Text style={s.financeTotalVal}>
+              {Math.round(mission.montantTotal * 0.9).toLocaleString()} FCFA
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* CTA action */}
+      {currentStep && mission.statut !== 'TERMINEE' && (
+        <View style={s.footer}>
+          <TouchableOpacity
+            style={[s.ctaBtn, { backgroundColor: currentStep.color }, actionLoading && s.ctaBtnDisabled]}
+            onPress={() => handleAction(currentStep.action)}
+            disabled={actionLoading}
+            activeOpacity={0.88}
+          >
+            {actionLoading
+              ? <ActivityIndicator color="#fff" />
+              : <>
+                <Text style={s.ctaBtnText}>{currentStep.label}</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
+              </>
+            }
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   )
 }
 
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f5f4ef' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   headerGrad: {},
-  header: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 20 },
-  headerTop: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20 },
-  headerGreeting: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 2 },
-  headerName: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
-  headerSpec: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
-  notifBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  disponCard: {
-    backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
-  disponCardOn: { backgroundColor: 'rgba(34,197,94,0.15)' },
-  disponLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  disponDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#888780' },
-  disponDotOn: { backgroundColor: '#22c55e' },
-  disponTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 2 },
-  disponSub: { fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 15 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16 },
+  backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: '#fff' },
+  urgentBadge: { backgroundColor: '#dc2626', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  urgentText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
   body: { flex: 1 },
-  activeMission: { margin: 16, marginBottom: 0, borderRadius: 18, overflow: 'hidden' },
-  activeMissionGrad: { padding: 18 },
-  activeMissionTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  activePulse: { width: 20, height: 20, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' },
-  activeDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
-  activeMissionLabel: { flex: 1, fontSize: 14, fontWeight: '700', color: '#fff' },
-  activeMissionSpec: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: -0.3, marginBottom: 4 },
-  activeMissionAddr: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
-  statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 16 },
-  statCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 14, alignItems: 'center',
+  patientCard: {
+    backgroundColor: '#fff', margin: 16, borderRadius: 20, padding: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
+  },
+  patientAvatar: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  patientAvatarText: { fontSize: 20, fontWeight: '800', color: '#0d5068' },
+  patientInfo: { flex: 1 },
+  patientName: { fontSize: 16, fontWeight: '800', color: '#1a1a18', marginBottom: 2 },
+  patientSpec: { fontSize: 12, fontWeight: '600', color: '#0d5068', marginBottom: 4 },
+  patientAddr: { fontSize: 12, color: '#888780', lineHeight: 17 },
+  patientActions: { gap: 8 },
+  actionBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
+  actionBtnGreen: { backgroundColor: '#dcfce7' },
+  noteCard: {
+    backgroundColor: '#fef3c7', marginHorizontal: 16, marginBottom: 8,
+    borderRadius: 14, padding: 14, borderWidth: 0.5, borderColor: '#fcd34d',
+  },
+  noteHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  noteTitle: { fontSize: 12, fontWeight: '700', color: '#0d5068' },
+  noteText: { fontSize: 13, color: '#5f5e5a', lineHeight: 19 },
+  section: { paddingHorizontal: 16, marginBottom: 16 },
+  sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: '#888780', marginBottom: 16 },
+  timeline: { backgroundColor: '#fff', borderRadius: 18, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  timelineRow: { flexDirection: 'row', gap: 14 },
+  timelineLeft: { alignItems: 'center', width: 28 },
+  timelineDot: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#f1f0eb', borderWidth: 1.5, borderColor: '#e5e4df',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  timelineDotDone: { backgroundColor: '#22c55e', borderColor: '#22c55e' },
+  timelineDotInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
+  timelineLine: { width: 1.5, flex: 1, backgroundColor: '#e5e4df', minHeight: 24, marginVertical: 4 },
+  timelineLineDone: { backgroundColor: '#22c55e' },
+  timelineContent: { flex: 1, paddingBottom: 24 },
+  timelineLabel: { fontSize: 14, color: '#b4b2a9', fontWeight: '500' },
+  timelineLabelDone: { color: '#22c55e' },
+  financeCard: {
+    backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18, padding: 18,
     shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
   },
-  statValue: { fontSize: 16, fontWeight: '800', color: '#1a1a18', marginBottom: 2 },
-  statLabel: { fontSize: 10, fontWeight: '600', color: '#888780', textTransform: 'uppercase', letterSpacing: 0.5 },
-  section: { paddingHorizontal: 16, marginTop: 20 },
-  sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: '#888780', marginBottom: 12 },
-  emptyCard: {
-    backgroundColor: '#fff', borderRadius: 18, padding: 32, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  financeTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a18', marginBottom: 14 },
+  financeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: 'rgba(0,0,0,0.06)' },
+  financeLabel: { fontSize: 13, color: '#888780' },
+  financeVal: { fontSize: 13, fontWeight: '600', color: '#1a1a18' },
+  financeTotalRow: { borderBottomWidth: 0, paddingTop: 12, marginTop: 4 },
+  financeTotalLabel: { fontSize: 15, fontWeight: '800', color: '#1a1a18' },
+  financeTotalVal: { fontSize: 15, fontWeight: '800', color: '#22c55e' },
+  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: 'rgba(0,0,0,0.06)' },
+  ctaBtn: {
+    borderRadius: 16, padding: 16, flexDirection: 'row',
+    alignItems: 'center', justifyContent: 'center', gap: 8,
   },
-  emptyText: { fontSize: 15, fontWeight: '700', color: '#1a1a18', marginTop: 12, marginBottom: 6 },
-  emptySub: { fontSize: 12, color: '#888780', textAlign: 'center', lineHeight: 17 },
-  missionCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 14, flexDirection: 'row',
-    alignItems: 'center', gap: 12, marginBottom: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
-  missionIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#e0f2fe', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  missionIconUrgent: { backgroundColor: '#fee2e2' },
-  missionInfo: { flex: 1 },
-  missionTop: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 3 },
-  missionSpec: { fontSize: 13, fontWeight: '700', color: '#1a1a18' },
-  urgentBadge: { backgroundColor: '#fee2e2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
-  urgentText: { fontSize: 9, fontWeight: '800', color: '#dc2626', letterSpacing: 0.5 },
-  missionPatient: { fontSize: 12, color: '#5f5e5a', marginBottom: 2 },
-  missionAddr: { fontSize: 11, color: '#b4b2a9' },
-  missionRight: { alignItems: 'flex-end' },
-  missionMontant: { fontSize: 13, fontWeight: '700', color: '#0d5068', marginBottom: 3 },
-  missionDate: { fontSize: 10, color: '#b4b2a9' },
+  ctaBtnDisabled: { opacity: 0.6 },
+  ctaBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 })

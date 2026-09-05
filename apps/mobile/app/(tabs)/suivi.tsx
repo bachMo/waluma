@@ -5,6 +5,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router'
 import { useState, useEffect } from 'react'
 import api from '@/lib/api'
+import { connectSocket, joinMission, leaveMission, getSocket } from '@/lib/socket'
 
 interface Mission {
   id: string
@@ -55,6 +56,20 @@ export default function SuiviScreen() {
 
   useEffect(() => {
     load()
+    // Connexion WebSocket
+connectSocket().then(sock => {
+  joinMission(missionId as string)
+  sock.on('mission:statut', (data) => {
+    if (data.missionId === missionId) {
+      load() // Recharger les données
+    }
+  })
+}).catch(console.error)
+
+return () => {
+  leaveMission(missionId as string)
+  clearInterval(interval)
+}
     const interval = setInterval(load, 15000)
     return () => clearInterval(interval)
   }, [missionId])
