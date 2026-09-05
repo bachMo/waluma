@@ -1,9 +1,12 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, ActivityIndicator, RefreshControl
+  StyleSheet, SafeAreaView, ActivityIndicator,
+  RefreshControl, StatusBar
 } from 'react-native'
 import { router } from 'expo-router'
 import { useState, useEffect, useCallback } from 'react'
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
+import { LinearGradient } from 'expo-linear-gradient'
 import api from '@/lib/api'
 
 interface Mission {
@@ -17,19 +20,17 @@ interface Mission {
   praticien: { user: { nom: string; prenom: string } } | null
 }
 
-const STATUT_LABEL: Record<string, string> = {
-  EN_ATTENTE: 'En attente', ACCEPTEE: 'Acceptée',
-  EN_ROUTE: 'En route', ARRIVE: 'Arrivé',
-  EN_COURS: 'Soin en cours', TERMINEE: 'Terminée',
-  ANNULEE: 'Annulée', EXPIREE: 'Expirée',
+const STATUT_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
+  TERMINEE:   { label: 'Terminé',      color: '#15803d', bg: '#dcfce7', icon: 'checkmark-circle' },
+  EN_COURS:   { label: 'Soin en cours', color: '#1d4ed8', bg: '#dbeafe', icon: 'medkit' },
+  EN_ROUTE:   { label: 'En route',      color: '#7c3aed', bg: '#ede9fe', icon: 'car' },
+  ACCEPTEE:   { label: 'Acceptée',      color: '#0d5068', bg: '#e0f2fe', icon: 'person' },
+  EN_ATTENTE: { label: 'En attente',    color: '#d97706', bg: '#fef3c7', icon: 'time' },
+  ANNULEE:    { label: 'Annulée',       color: '#dc2626', bg: '#fee2e2', icon: 'close-circle' },
+  EXPIREE:    { label: 'Expirée',       color: '#6b7280', bg: '#f3f4f6', icon: 'alert-circle' },
 }
 
-const STATUT_COLOR: Record<string, string> = {
-  TERMINEE: '#15803d', ANNULEE: '#991b1b', EXPIREE: '#991b1b',
-  EN_ATTENTE: '#92400e', EN_COURS: '#1d4ed8',
-}
-
-const SPECIALITE_LABEL: Record<string, string> = {
+const SPEC_LABEL: Record<string, string> = {
   INFIRMIER: 'Soins infirmiers', MEDECIN_GENERALISTE: 'Médecin généraliste',
   SAGE_FEMME: 'Sage-femme', KINESITHERAPEUTE: 'Kinésithérapie',
   PRELEVEUR: 'Prélèvement', PEDIATRE: 'Pédiatre', AUTRE: 'Autre',
@@ -51,37 +52,39 @@ export default function HistoriqueScreen() {
   }
 
   useEffect(() => { load() }, [])
+  const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
 
-  const onRefresh = useCallback(() => {
-    setRefreshing(true)
-    load()
-  }, [])
-
-  function formatDate(iso: string) {
-    return new Date(iso).toLocaleDateString('fr-FR', {
-      day: '2-digit', month: 'short', year: 'numeric',
-    })
-  }
+  const actives = missions.filter(m => !['TERMINEE', 'ANNULEE', 'EXPIREE'].includes(m.statut))
+  const passees = missions.filter(m => ['TERMINEE', 'ANNULEE', 'EXPIREE'].includes(m.statut))
 
   return (
-    <SafeAreaView style={s.safe}>
-      <View style={s.header}>
-        <Text style={s.headerTitle}>Mes soins</Text>
-      </View>
+    <View style={s.root}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient colors={['#0d5068', '#0a3f52']} style={s.header}>
+        <SafeAreaView>
+          <View style={s.headerContent}>
+            <Text style={s.headerTitle}>Mes soins</Text>
+            <Text style={s.headerSub}>{missions.length} soin{missions.length > 1 ? 's' : ''} au total</Text>
+          </View>
+        </SafeAreaView>
+      </LinearGradient>
 
       {loading ? (
         <View style={s.center}>
           <ActivityIndicator color="#0d5068" size="large" />
         </View>
       ) : missions.length === 0 ? (
-        <View style={s.center}>
-          <Text style={{ fontSize: 40, marginBottom: 12 }}>🏥</Text>
+        <View style={s.empty}>
+          <LinearGradient colors={['#e0f2fe', '#f0fdf4']} style={s.emptyIcon}>
+            <MaterialCommunityIcons name="needle" size={40} color="#0d5068" />
+          </LinearGradient>
           <Text style={s.emptyTitle}>Aucun soin pour l'instant</Text>
           <Text style={s.emptySub}>Vos demandes de soin apparaîtront ici</Text>
           <TouchableOpacity
             style={s.emptyBtn}
             onPress={() => router.push('/(tabs)/demande')}
           >
+            <Ionicons name="add" size={18} color="#fff" />
             <Text style={s.emptyBtnText}>Demander un soin</Text>
           </TouchableOpacity>
         </View>
@@ -91,64 +94,96 @@ export default function HistoriqueScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d5068" />}
         >
-          <View style={s.card}>
-            {missions.map((m, i) => (
-              <TouchableOpacity
-                key={m.id}
-                style={[s.row, i < missions.length - 1 && s.rowBorder]}
-                onPress={() => router.push({ pathname: '/(tabs)/suivi', params: { missionId: m.id } })}
-              >
-                <View style={[s.icon, { backgroundColor: m.statut === 'TERMINEE' ? '#dcfce7' : m.statut === 'ANNULEE' ? '#fee2e2' : '#e0f2fe' }]}>
-                  <Text style={{ fontSize: 18 }}>
-                    {m.statut === 'TERMINEE' ? '✅' : m.statut === 'ANNULEE' ? '❌' : '⏳'}
-                  </Text>
-                </View>
-                <View style={s.info}>
-                  <Text style={s.specialite}>{SPECIALITE_LABEL[m.specialite] ?? m.specialite}</Text>
-                  <Text style={s.praticien} numberOfLines={1}>
-                    {m.praticien ? `${m.praticien.user.prenom} ${m.praticien.user.nom}` : 'En recherche de praticien'}
-                  </Text>
-                  <Text style={s.date}>{formatDate(m.createdAt)}</Text>
-                </View>
-                <View style={s.right}>
-                  <Text style={[s.statut, { color: STATUT_COLOR[m.statut] ?? '#5f5e5a' }]}>
-                    {STATUT_LABEL[m.statut] ?? m.statut}
-                  </Text>
-                  <Text style={s.montant}>{m.montantTotal.toLocaleString()} F</Text>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-          <View style={{ height: 24 }} />
+          {/* Missions actives */}
+          {actives.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>En cours</Text>
+              {actives.map(m => (
+                <MissionCard key={m.id} mission={m} active />
+              ))}
+            </View>
+          )}
+
+          {/* Historique */}
+          {passees.length > 0 && (
+            <View style={s.section}>
+              <Text style={s.sectionTitle}>Historique</Text>
+              {passees.map(m => (
+                <MissionCard key={m.id} mission={m} />
+              ))}
+            </View>
+          )}
+
+          <View style={{ height: 32 }} />
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
+  )
+}
+
+function MissionCard({ mission: m, active }: { mission: Mission; active?: boolean }) {
+  const config = STATUT_CONFIG[m.statut] ?? STATUT_CONFIG.EN_ATTENTE
+
+  return (
+    <TouchableOpacity
+      style={[s.card, active && s.cardActive]}
+      onPress={() => router.push({ pathname: '/(tabs)/suivi', params: { missionId: m.id } })}
+      activeOpacity={0.85}
+    >
+      <View style={[s.cardIcon, { backgroundColor: config.bg }]}>
+        <Ionicons name={config.icon as never} size={22} color={config.color} />
+      </View>
+      <View style={s.cardInfo}>
+        <Text style={s.cardSpec}>{SPEC_LABEL[m.specialite] ?? m.specialite}</Text>
+        <Text style={s.cardPrat} numberOfLines={1}>
+          {m.praticien ? `${m.praticien.user.prenom} ${m.praticien.user.nom}` : 'Recherche en cours...'}
+        </Text>
+        <Text style={s.cardDate}>
+          {new Date(m.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
+        </Text>
+      </View>
+      <View style={s.cardRight}>
+        <View style={[s.statusBadge, { backgroundColor: config.bg }]}>
+          <Text style={[s.statusText, { color: config.color }]}>{config.label}</Text>
+        </View>
+        <Text style={s.cardMontant}>{m.montantTotal.toLocaleString()} F</Text>
+      </View>
+    </TouchableOpacity>
   )
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#f5f4ef' },
-  header: { backgroundColor: '#0d5068', padding: 16 },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#fff' },
-  body: { flex: 1, padding: 16 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 },
-  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#1a1a18', marginBottom: 6 },
-  emptySub: { fontSize: 13, color: '#888780', textAlign: 'center', marginBottom: 20 },
-  emptyBtn: { backgroundColor: '#22c55e', borderRadius: 12, paddingHorizontal: 24, paddingVertical: 13 },
-  emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
-  card: {
-    backgroundColor: '#fff', borderRadius: 16,
-    borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.08)',
-    overflow: 'hidden',
+  root: { flex: 1, backgroundColor: '#f5f4ef' },
+  header: {},
+  headerContent: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
+  headerTitle: { fontSize: 24, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
+  headerSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  empty: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 40 },
+  emptyIcon: { width: 88, height: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyTitle: { fontSize: 18, fontWeight: '800', color: '#1a1a18', marginBottom: 8 },
+  emptySub: { fontSize: 13, color: '#888780', textAlign: 'center', marginBottom: 24 },
+  emptyBtn: {
+    backgroundColor: '#22c55e', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  rowBorder: { borderBottomWidth: 0.5, borderBottomColor: 'rgba(0,0,0,0.06)' },
-  icon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  info: { flex: 1 },
-  specialite: { fontSize: 14, fontWeight: '600', color: '#1a1a18', marginBottom: 2 },
-  praticien: { fontSize: 12, color: '#5f5e5a', marginBottom: 2 },
-  date: { fontSize: 11, color: '#888780' },
-  right: { alignItems: 'flex-end' },
-  statut: { fontSize: 11, fontWeight: '700', marginBottom: 4 },
-  montant: { fontSize: 13, fontWeight: '600', color: '#1a1a18' },
+  emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  body: { flex: 1 },
+  section: { paddingHorizontal: 20, marginTop: 20 },
+  sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: '#888780', marginBottom: 12 },
+  card: {
+    backgroundColor: '#fff', borderRadius: 18, padding: 16, flexDirection: 'row',
+    alignItems: 'center', gap: 14, marginBottom: 10,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
+  },
+  cardActive: { borderWidth: 1.5, borderColor: '#22c55e' },
+  cardIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  cardInfo: { flex: 1 },
+  cardSpec: { fontSize: 14, fontWeight: '700', color: '#1a1a18', marginBottom: 3 },
+  cardPrat: { fontSize: 12, color: '#5f5e5a', marginBottom: 3 },
+  cardDate: { fontSize: 11, color: '#b4b2a9', fontWeight: '500' },
+  cardRight: { alignItems: 'flex-end', gap: 6 },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  statusText: { fontSize: 10, fontWeight: '700' },
+  cardMontant: { fontSize: 13, fontWeight: '700', color: '#1a1a18' },
 })

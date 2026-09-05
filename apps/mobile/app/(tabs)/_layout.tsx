@@ -1,5 +1,6 @@
 import { Tabs } from 'expo-router'
-import { Text } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { View, Platform } from 'react-native'
 import type { ColorValue } from 'react-native'
 
 export default function TabLayout() {
@@ -7,18 +8,24 @@ export default function TabLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#0d5068',
-        tabBarInactiveTintColor: '#9ca3af',
+        tabBarActiveTintColor: '#22c55e',
+        tabBarInactiveTintColor: '#b4b2a9',
         tabBarStyle: {
           backgroundColor: '#ffffff',
-          borderTopColor: '#e5e4df',
-          borderTopWidth: 0.5,
-          height: 60,
-          paddingBottom: 8,
+          borderTopWidth: 0,
+          shadowColor: '#000',
+          shadowOffset: { width: 0, height: -4 },
+          shadowOpacity: 0.08,
+          shadowRadius: 16,
+          elevation: 12,
+          height: Platform.OS === 'ios' ? 84 : 64,
+          paddingBottom: Platform.OS === 'ios' ? 28 : 10,
+          paddingTop: 10,
         },
         tabBarLabelStyle: {
-          fontSize: 11,
-          fontWeight: '600',
+          fontSize: 10,
+          fontWeight: '700',
+          marginTop: 2,
         },
       }}
     >
@@ -26,21 +33,27 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Accueil',
-          tabBarIcon: ({ color }) => <TabIcon emoji="🏠" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'home' : 'home-outline'} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="historique"
         options={{
           title: 'Mes soins',
-          tabBarIcon: ({ color }) => <TabIcon emoji="📋" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'clipboard' : 'clipboard-outline'} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen
         name="profil"
         options={{
           title: 'Profil',
-          tabBarIcon: ({ color }) => <TabIcon emoji="👤" color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <TabIcon name={focused ? 'person' : 'person-outline'} color={color} focused={focused} />
+          ),
         }}
       />
       <Tabs.Screen name="demande" options={{ href: null }} />
@@ -52,7 +65,14 @@ export default function TabLayout() {
   )
 }
 
-function TabIcon({ emoji, color }: { emoji: string; color: ColorValue }) {
-  const isActive = color === '#0d5068'
-  return <Text style={{ fontSize: 22, opacity: isActive ? 1 : 0.5 }}>{emoji}</Text>
+function TabIcon({ name, color, focused }: { name: string; color: ColorValue; focused: boolean }) {
+  return (
+    <View style={{
+      alignItems: 'center', justifyContent: 'center',
+      width: 36, height: 36, borderRadius: 12,
+      backgroundColor: focused ? 'rgba(34,197,94,0.12)' : 'transparent',
+    }}>
+      <Ionicons name={name as never} size={22} color={color} />
+    </View>
+  )
 }

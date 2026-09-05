@@ -1,12 +1,16 @@
-import { useState } from 'react'
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, SafeAreaView, KeyboardAvoidingView,
-  Platform, ActivityIndicator, Alert
+  StyleSheet, KeyboardAvoidingView, Platform,
+  ActivityIndicator, Alert, Dimensions
 } from 'react-native'
 import { router } from 'expo-router'
+import { useState } from 'react'
+import { LinearGradient } from 'expo-linear-gradient'
+import { Ionicons } from '@expo/vector-icons'
 import api from '@/lib/api'
 import { saveAuth } from '@/lib/auth'
+
+const { height } = Dimensions.get('window')
 
 export default function LoginScreen() {
   const [step, setStep] = useState<'phone' | 'otp'>('phone')
@@ -15,13 +19,13 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false)
 
   async function handleSendOtp() {
-    if (telephone.length < 12) {
-      Alert.alert('Erreur', 'Numéro de téléphone invalide')
+    if (telephone.replace(/\s/g, '').length < 12) {
+      Alert.alert('Numéro invalide', 'Entrez un numéro sénégalais valide')
       return
     }
     setLoading(true)
     try {
-      await api.post('/auth/otp/send', { telephone })
+      await api.post('/auth/otp/send', { telephone: telephone.replace(/\s/g, '') })
       setStep('otp')
     } catch (e: unknown) {
       const err = e as { response?: { data?: { error?: string } } }
@@ -33,145 +37,192 @@ export default function LoginScreen() {
 
   async function handleVerifyOtp() {
     if (otp.length !== 6) {
-      Alert.alert('Erreur', 'Le code doit contenir 6 chiffres')
+      Alert.alert('Code invalide', 'Le code doit contenir 6 chiffres')
       return
     }
     setLoading(true)
     try {
-      const { data } = await api.post('/auth/otp/verify', { telephone, code: otp })
+      const { data } = await api.post('/auth/otp/verify', {
+        telephone: telephone.replace(/\s/g, ''), code: otp
+      })
       await saveAuth(data.user, data.accessToken, data.refreshToken)
-      if (data.user.role === 'PATIENT') {
-        router.replace('/(tabs)')
-      } else if (data.user.role === 'PRATICIEN') {
-        router.replace('/(tabs)')
-      }
+      router.replace('/(tabs)')
     } catch {
-      Alert.alert('Erreur', 'Code invalide ou expiré')
+      Alert.alert('Code incorrect', 'Le code est invalide ou expiré. Réessayez.')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <SafeAreaView style={s.safe}>
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
-        <View style={s.container}>
-          {/* Header */}
-          <View style={s.header}>
-            <View style={s.logo}>
+    <View style={s.root}>
+      <LinearGradient colors={['#0d5068', '#083d50', '#061e28']} style={s.bg}>
+        {/* Décorations */}
+        <View style={[s.circle, s.circle1]} />
+        <View style={[s.circle, s.circle2]} />
+        <View style={[s.circle, s.circle3]} />
+
+        <KeyboardAvoidingView
+          style={s.kav}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          {/* Logo */}
+          <View style={s.logoWrap}>
+            <View style={s.logoIcon}>
+              <Ionicons name="heart-circle" size={40} color="#22c55e" />
+            </View>
+            <Text style={s.logoText}>
               <Text style={s.logoW}>W</Text>
               <Text style={s.logoAluma}>aluma</Text>
-            </View>
-            <Text style={s.tagline}>Soins à domicile · Dakar</Text>
+            </Text>
+            <Text style={s.logoSub}>Soins à domicile · Dakar</Text>
           </View>
 
-          {/* Form */}
+          {/* Card */}
           <View style={s.card}>
             {step === 'phone' ? (
               <>
-                <Text style={s.label}>Numéro de téléphone</Text>
-                <TextInput
-                  style={s.input}
-                  value={telephone}
-                  onChangeText={setTelephone}
-                  placeholder="+221 77 000 00 00"
-                  keyboardType="phone-pad"
-                  autoFocus
-                />
-                <Text style={s.hint}>Vous recevrez un code de confirmation</Text>
+                <Text style={s.cardTitle}>Connexion</Text>
+                <Text style={s.cardSub}>Entrez votre numéro pour recevoir un code</Text>
+
+                <View style={s.inputWrap}>
+                  <View style={s.inputFlag}>
+                    <Text style={s.flagText}>🇸🇳</Text>
+                  </View>
+                  <TextInput
+                    style={s.input}
+                    value={telephone}
+                    onChangeText={setTelephone}
+                    placeholder="77 000 00 00"
+                    keyboardType="phone-pad"
+                    autoFocus
+                    placeholderTextColor="#b4b2a9"
+                  />
+                </View>
+
                 <TouchableOpacity
                   style={[s.btn, loading && s.btnDisabled]}
                   onPress={handleSendOtp}
                   disabled={loading}
+                  activeOpacity={0.88}
                 >
                   {loading
                     ? <ActivityIndicator color="#fff" />
-                    : <Text style={s.btnText}>Recevoir le code</Text>
+                    : <>
+                      <Text style={s.btnText}>Recevoir le code</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#fff" />
+                    </>
                   }
                 </TouchableOpacity>
               </>
             ) : (
               <>
-                <Text style={s.label}>Code de confirmation</Text>
-                <Text style={s.subLabel}>Envoyé au {telephone}</Text>
+                <TouchableOpacity onPress={() => { setStep('phone'); setOtp('') }} style={s.backRow}>
+                  <Ionicons name="chevron-back" size={18} color="#5f5e5a" />
+                  <Text style={s.backText}>Modifier le numéro</Text>
+                </TouchableOpacity>
+
+                <Text style={s.cardTitle}>Code de confirmation</Text>
+                <Text style={s.cardSub}>
+                  Code envoyé au <Text style={{ fontWeight: '700', color: '#0d5068' }}>{telephone}</Text>
+                </Text>
+
                 <TextInput
-                  style={[s.input, s.inputOtp]}
+                  style={s.otpInput}
                   value={otp}
                   onChangeText={setOtp}
-                  placeholder="000000"
+                  placeholder="· · · · · ·"
                   keyboardType="number-pad"
                   maxLength={6}
                   autoFocus
+                  placeholderTextColor="#d1d0c9"
                 />
+
                 <TouchableOpacity
                   style={[s.btn, s.btnGreen, loading && s.btnDisabled]}
                   onPress={handleVerifyOtp}
                   disabled={loading}
+                  activeOpacity={0.88}
                 >
                   {loading
                     ? <ActivityIndicator color="#fff" />
-                    : <Text style={s.btnText}>Se connecter</Text>
+                    : <>
+                      <Ionicons name="checkmark-circle" size={18} color="#fff" />
+                      <Text style={s.btnText}>Se connecter</Text>
+                    </>
                   }
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={s.linkBtn}
-                  onPress={() => { setStep('phone'); setOtp('') }}
-                >
-                  <Text style={s.linkText}>Modifier le numéro</Text>
+
+                <TouchableOpacity style={s.resendBtn} onPress={handleSendOtp}>
+                  <Text style={s.resendText}>Renvoyer le code</Text>
                 </TouchableOpacity>
               </>
             )}
           </View>
 
-          {/* Privacy */}
           <Text style={s.privacy}>
             En vous connectant, vous acceptez nos{' '}
-            <Text style={s.privacyLink}>conditions d'utilisation</Text>
+            <Text style={s.privacyLink}>CGU</Text>
             {' '}et notre{' '}
             <Text style={s.privacyLink}>politique de confidentialité</Text>
           </Text>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+      </LinearGradient>
+    </View>
   )
 }
 
 const s = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: '#0d5068' },
-  flex: { flex: 1 },
-  container: { flex: 1, padding: 24, justifyContent: 'center' },
-  header: { alignItems: 'center', marginBottom: 32 },
-  logo: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 6 },
-  logoW: { fontSize: 38, fontWeight: '800', color: '#fff', letterSpacing: -1 },
-  logoAluma: { fontSize: 38, fontWeight: '800', color: '#4ade80', letterSpacing: -1 },
-  tagline: { fontSize: 13, color: 'rgba(255,255,255,0.5)', fontWeight: '500' },
+  root: { flex: 1 },
+  bg: { flex: 1 },
+  circle: { position: 'absolute', borderRadius: 999, backgroundColor: 'rgba(255,255,255,0.04)' },
+  circle1: { width: 300, height: 300, top: -80, right: -80 },
+  circle2: { width: 200, height: 200, top: height * 0.25, left: -60 },
+  circle3: { width: 150, height: 150, bottom: 100, right: -30 },
+  kav: { flex: 1, justifyContent: 'center', paddingHorizontal: 24 },
+  logoWrap: { alignItems: 'center', marginBottom: 32 },
+  logoIcon: { marginBottom: 12 },
+  logoText: { flexDirection: 'row', marginBottom: 6 },
+  logoW: { fontSize: 36, fontWeight: '800', color: '#fff', letterSpacing: -1 },
+  logoAluma: { fontSize: 36, fontWeight: '800', color: '#4ade80', letterSpacing: -1 },
+  logoSub: { fontSize: 13, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
   card: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 20,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15, shadowRadius: 20, elevation: 8,
+    backgroundColor: '#fff', borderRadius: 24, padding: 24,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.25, shadowRadius: 40, elevation: 16,
   },
-  label: { fontSize: 14, fontWeight: '700', color: '#1a1a18', marginBottom: 6 },
-  subLabel: { fontSize: 12, color: '#888780', marginBottom: 12, marginTop: -4 },
-  hint: { fontSize: 12, color: '#888780', marginBottom: 14 },
-  input: {
-    borderWidth: 1, borderColor: '#e5e4df', borderRadius: 12,
-    padding: 14, fontSize: 16, color: '#1a1a18', marginBottom: 8,
+  cardTitle: { fontSize: 22, fontWeight: '800', color: '#1a1a18', letterSpacing: -0.5, marginBottom: 6 },
+  cardSub: { fontSize: 13, color: '#888780', lineHeight: 18, marginBottom: 20 },
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#e5e4df', borderRadius: 14,
+    overflow: 'hidden', marginBottom: 14,
   },
-  inputOtp: {
-    fontSize: 24, fontWeight: '700', textAlign: 'center', letterSpacing: 8,
+  inputFlag: {
+    paddingHorizontal: 14, paddingVertical: 14,
+    backgroundColor: '#f5f4ef', borderRightWidth: 1, borderRightColor: '#e5e4df',
   },
+  flagText: { fontSize: 20 },
+  input: { flex: 1, paddingHorizontal: 14, fontSize: 17, color: '#1a1a18', fontWeight: '600' },
   btn: {
-    backgroundColor: '#0d5068', borderRadius: 12,
-    padding: 16, alignItems: 'center', marginTop: 8,
+    backgroundColor: '#0d5068', borderRadius: 14, padding: 16,
+    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
   },
   btnGreen: { backgroundColor: '#22c55e' },
   btnDisabled: { opacity: 0.6 },
-  btnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  linkBtn: { alignItems: 'center', marginTop: 12 },
-  linkText: { fontSize: 13, color: '#888780', fontWeight: '600' },
-  privacy: { fontSize: 11, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginTop: 24, lineHeight: 17 },
-  privacyLink: { color: 'rgba(255,255,255,0.7)', textDecorationLine: 'underline' },
+  btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
+  backText: { fontSize: 13, color: '#5f5e5a', fontWeight: '600' },
+  otpInput: {
+    fontSize: 32, fontWeight: '800', textAlign: 'center', letterSpacing: 10,
+    color: '#1a1a18', borderWidth: 1.5, borderColor: '#e5e4df', borderRadius: 14,
+    padding: 16, marginBottom: 14,
+  },
+  resendBtn: { alignItems: 'center', marginTop: 12 },
+  resendText: { fontSize: 13, color: '#0d5068', fontWeight: '600' },
+  privacy: {
+    fontSize: 11, color: 'rgba(255,255,255,0.35)',
+    textAlign: 'center', marginTop: 20, lineHeight: 17,
+  },
+  privacyLink: { color: 'rgba(255,255,255,0.6)', textDecorationLine: 'underline' },
 })
