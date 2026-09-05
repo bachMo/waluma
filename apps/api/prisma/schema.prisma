@@ -134,6 +134,8 @@ model User {
   // Notifications
   notifications Notification[]
 
+  pushTokens  PushToken[]
+
   @@map("users")
 }
 
@@ -454,4 +456,16 @@ model Parametre {
   updatedAt DateTime @updatedAt
 
   @@map("parametres")
+}
+
+model PushToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String   // ios, android
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("push_tokens")
 }

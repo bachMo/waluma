@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { prisma } from '../prisma/client'
 import { AuthRequest } from '../middlewares/auth.middleware'
 import { findBestPraticien } from '../services/matching.service'
+import { sendToUsers } from '../services/push.service'
 
 // POST /api/missions — créer une demande de soin (patient)
 export async function creerMission(req: AuthRequest, res: Response): Promise<void> {
@@ -56,6 +57,15 @@ export async function creerMission(req: AuthRequest, res: Response): Promise<voi
           accepteeAt: new Date(),
         },
       })
+
+      // Notifier le praticien assigné
+      await sendToUsers(
+        prisma,
+        [praticien.userId],
+        '🔔 Nouvelle mission',
+        `${specialite} · ${adresseTexte}`,
+        { missionId: mission.id, type: 'MISSION_NOUVELLE' }
+      )
     }
   }
 
@@ -169,6 +179,25 @@ export async function updateStatutMission(req: AuthRequest, res: Response): Prom
     },
   })
 
+  // Notifier le patient selon le statut
+  const notifPatient: Record<string, { title: string; body: string }> = {
+    EN_ROUTE: { title: '🚗 Votre praticien arrive', body: 'Votre soignant est en route vers vous' },
+    ARRIVE: { title: '📍 Praticien arrivé', body: 'Votre soignant est devant chez vous' },
+    EN_COURS: { title: '💉 Soin en cours', body: 'Le soin a commencé' },
+    TERMINEE: { title: '✅ Soin terminé', body: 'Pensez à laisser un avis !' },
+    ANNULEE: { title: '❌ Mission annulée', body: 'Votre mission a été annulée' },
+  }
+  const notif = notifPatient[statut]
+  if (notif) {
+    await sendToUsers(
+      prisma,
+      [mission.patientId],
+      notif.title,
+      notif.body,
+      { missionId: id, type: `MISSION_${statut}` }
+    )
+  }
+
   // Mettre à jour les stats du praticien si mission terminée
   if (statut === 'TERMINEE' && mission.praticienId) {
     await prisma.praticien.update({
@@ -242,7 +271,6 @@ export async function soumettreCompteRendu(req: AuthRequest, res: Response): Pro
     },
   })
 
-  // Passer la mission en TERMINEE
   await prisma.mission.update({
     where: { id },
     data: { statut: 'TERMINEE', finSoinAt: new Date() },
@@ -278,7 +306,6 @@ export async function noterMission(req: AuthRequest, res: Response): Promise<voi
     },
   })
 
-  // Recalculer la note moyenne du praticien
   const avgResult = await prisma.avis.aggregate({
     where: { praticienId: mission.praticienId },
     _avg: { note: true },
