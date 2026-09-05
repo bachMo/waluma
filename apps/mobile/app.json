@@ -55,7 +55,10 @@
         "WRITE_EXTERNAL_STORAGE",
         "RECEIVE_BOOT_COMPLETED",
         "VIBRATE",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA"
       ]
     },
     "web": {
@@ -106,8 +109,9 @@
         "origin": false
       },
       "eas": {
-        "projectId": "your-project-id"
+        "projectId": "40ec669a-a3e2-452f-95f2-408efaa527fb"
       }
-    }
+    },
+    "owner": "bach_johnson"
   }
 }
