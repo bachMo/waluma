@@ -12,6 +12,7 @@ import { authenticate, requireRole } from "../middlewares/auth.middleware";
 import { upload } from "../middlewares/upload.middleware";
 import { creerPraticien } from '../controllers/praticien.controller'
 import { updateInfosPraticien } from '../controllers/praticien.controller'
+import { getMonProfil } from '../controllers/praticien.controller'
 
 const router = Router();
 
@@ -26,7 +27,7 @@ router.patch('/:id/infos', authenticate, requireRole('ADMIN'), updateInfosPratic
 router.patch("/:id/disponibilite", authenticate, requireRole("PRATICIEN"), toggleDisponibilite);
 router.post("/:id/documents", authenticate, upload.single("file"), uploadDocument);
 router.delete("/documents/:docId", authenticate, deleteDocument);
-
+router.get('/me', authenticate, requireRole('PRATICIEN'), getMonProfil)
 // Commun (admin + praticien)
 router.get("/:id", authenticate, getPraticien);
 

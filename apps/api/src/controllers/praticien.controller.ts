@@ -295,3 +295,20 @@ export async function updateInfosPraticien(req: Request, res: Response): Promise
 
   res.json(updated)
 }
+
+// GET /api/praticiens/me — praticien connecté
+export async function getMonProfil(req: AuthRequest, res: Response): Promise<void> {
+  const praticien = await prisma.praticien.findUnique({
+    where: { userId: req.user!.userId },
+    include: {
+      user: { select: { nom: true, prenom: true, telephone: true } },
+      specialites: true,
+      documents: true,
+    },
+  })
+  if (!praticien) {
+    res.status(404).json({ error: 'Praticien introuvable' })
+    return
+  }
+  res.json(praticien)
+}

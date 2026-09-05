@@ -46,7 +46,11 @@ export default function LoginScreen() {
         telephone: telephone.replace(/\s/g, ''), code: otp
       })
       await saveAuth(data.user, data.accessToken, data.refreshToken)
-      router.replace('/(tabs)')
+      if (data.user.role === 'PATIENT') {
+  router.replace('/(tabs)' as never)
+} else if (data.user.role === 'PRATICIEN') {
+  router.replace('/(praticien)' as never)
+}
     } catch {
       Alert.alert('Code incorrect', 'Le code est invalide ou expiré. Réessayez.')
     } finally {
