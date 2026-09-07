@@ -105,13 +105,13 @@ export default function DashboardPage() {
                 deltaUp
               />
               <StatCard
-                label="Volume · FCFA"
-                value={data?.kpis.volumeCeMois
-                  ? (data.kpis.volumeCeMois / 1000000).toFixed(1) + 'M'
-                  : '0'}
-                delta="Ce mois"
-                deltaUp
-              />
+  label="Volume · FCFA"
+  value={data?.kpis.volumeCeMois
+    ? data.kpis.volumeCeMois.toLocaleString('fr-FR')
+    : '0'}
+  delta="Ce mois"
+  deltaUp
+/>
               <StatCard
                 label="Praticiens actifs"
                 value={data?.kpis.praticiensActifs ?? 0}

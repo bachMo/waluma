@@ -185,15 +185,13 @@ export default function PraticiensPage() {
                     ) : <span className="text-gray-300">—</span>}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    {p.statutCompte === 'VALIDE' ? (
-                      <button
-                        onClick={() => handleToggleDisponible(p)}
-                        className={`w-9 h-5 rounded-full relative transition-colors ${p.disponible ? 'bg-[#22c55e]' : 'bg-gray-200'}`}
-                      >
-                        <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-0.5 transition-transform ${p.disponible ? 'translate-x-4' : 'translate-x-0.5'}`}></div>
-                      </button>
-                    ) : <span className="text-gray-300 text-xs">—</span>}
-                  </td>
+  <div className="flex items-center justify-center gap-1.5">
+    <div className={`w-2 h-2 rounded-full ${p.disponible ? 'bg-[#22c55e]' : 'bg-gray-300'}`}></div>
+    <span className={`text-[11px] font-semibold ${p.disponible ? 'text-[#15803d]' : 'text-gray-400'}`}>
+      {p.disponible ? 'Dispo' : 'Indispo'}
+    </span>
+  </div>
+</td>
                   <td className="px-4 py-3 text-[11px] text-gray-400">
                     {new Date(p.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                   </td>

@@ -63,7 +63,10 @@ export default function CompteRenduScreen() {
                 spo2: constantes.spo2 ? parseInt(constantes.spo2) : undefined,
               })
               Alert.alert('✓ Mission terminée', 'Le compte rendu a été enregistré et la mission est clôturée.', [
-                { text: 'OK', onPress: () => router.replace('/praticien' as never) },
+                { text: 'OK', onPress: () => {
+  router.dismissAll()
+  router.replace('/(praticien)' as never)
+}},
               ])
             } catch {
               Alert.alert('Erreur', 'Impossible de soumettre le compte rendu')
