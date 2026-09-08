@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Topbar from '@/components/admin/Topbar'
 import Badge from '@/components/ui/Badge'
 import api from '@/lib/api'
@@ -17,46 +18,31 @@ interface Mission {
   createdAt: string
   urgence: boolean
   patient: { nom: string; prenom: string }
-  praticien: {
-    user: { nom: string; prenom: string }
-  } | null
+  praticien: { user: { nom: string; prenom: string } } | null
 }
 
 const statutVariant: Record<string, 'active' | 'enroute' | 'inprog' | 'urgent' | 'done' | 'cancelled' | 'pending'> = {
-  EN_ATTENTE: 'urgent',
-  ACCEPTEE: 'pending',
-  EN_ROUTE: 'enroute',
-  ARRIVE: 'enroute',
-  EN_COURS: 'inprog',
-  TERMINEE: 'done',
-  ANNULEE: 'cancelled',
-  EXPIREE: 'cancelled',
+  EN_ATTENTE: 'urgent', ACCEPTEE: 'pending', EN_ROUTE: 'enroute',
+  ARRIVE: 'enroute', EN_COURS: 'inprog', TERMINEE: 'done',
+  ANNULEE: 'cancelled', EXPIREE: 'cancelled',
 }
 
 const statutLabel: Record<string, string> = {
-  EN_ATTENTE: 'En attente',
-  ACCEPTEE: 'Acceptée',
-  EN_ROUTE: 'En route',
-  ARRIVE: 'Arrivé',
-  EN_COURS: 'Soin en cours',
-  TERMINEE: 'Terminée',
-  ANNULEE: 'Annulée',
-  EXPIREE: 'Expirée',
+  EN_ATTENTE: 'En attente', ACCEPTEE: 'Acceptée', EN_ROUTE: 'En route',
+  ARRIVE: 'Arrivé', EN_COURS: 'Soin en cours', TERMINEE: 'Terminée',
+  ANNULEE: 'Annulée', EXPIREE: 'Expirée',
 }
 
 const specialiteLabel: Record<string, string> = {
-  INFIRMIER: 'Soins infirmiers',
-  MEDECIN_GENERALISTE: 'Médecine générale',
-  SAGE_FEMME: 'Sage-femme',
-  KINESITHERAPEUTE: 'Kinésithérapie',
-  PRELEVEUR: 'Prélèvement',
-  PEDIATRE: 'Pédiatrie',
-  AUTRE: 'Autre',
+  INFIRMIER: 'Soins infirmiers', MEDECIN_GENERALISTE: 'Médecine générale',
+  SAGE_FEMME: 'Sage-femme', KINESITHERAPEUTE: 'Kinésithérapie',
+  PRELEVEUR: 'Prélèvement', PEDIATRE: 'Pédiatrie', AUTRE: 'Autre',
 }
 
 const ACTIVES = ['EN_ATTENTE', 'ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS']
 
 export default function MissionsPage() {
+  const router = useRouter()
   const [missions, setMissions] = useState<Mission[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -78,7 +64,8 @@ export default function MissionsPage() {
 
   useEffect(() => { load() }, [filterStatut])
 
-  async function handleAssigner(missionId: string) {
+  async function handleAssigner(e: React.MouseEvent, missionId: string) {
+    e.stopPropagation()
     const praticienId = prompt('ID du praticien à assigner :')
     if (!praticienId) return
     try {
@@ -171,7 +158,8 @@ export default function MissionsPage() {
               ) : filtered.map((m) => (
                 <tr
                   key={m.id}
-                  className={`border-b border-gray-50 hover:bg-gray-50 transition ${m.statut === 'EN_ATTENTE' && !m.praticien ? 'bg-red-50/40' : ''}`}
+                  onClick={() => router.push(`/missions/${m.id}`)}
+                  className={`border-b border-gray-50 hover:bg-gray-50 transition cursor-pointer ${m.statut === 'EN_ATTENTE' && !m.praticien ? 'bg-red-50/40' : ''}`}
                 >
                   <td className="px-4 py-3 font-mono text-[11px] text-gray-400 truncate">
                     {m.reference.slice(0, 8).toUpperCase()}
@@ -198,32 +186,25 @@ export default function MissionsPage() {
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <Badge
-                      variant={statutVariant[m.statut] ?? 'pending'}
-                      label={statutLabel[m.statut] ?? m.statut}
-                    />
+                    <Badge variant={statutVariant[m.statut] ?? 'pending'} label={statutLabel[m.statut] ?? m.statut} />
                   </td>
-                  <td className="px-4 py-3 text-[12px] text-gray-500">
-                    {formatHeure(m.createdAt)}
-                  </td>
+                  <td className="px-4 py-3 text-[12px] text-gray-500">{formatHeure(m.createdAt)}</td>
                   <td className="px-4 py-3 text-[12px] font-bold text-purple-700">
                     {formatHeure(m.debutSoinAt || m.enRouteAt || m.accepteeAt)}
                   </td>
                   <td className="px-4 py-3 font-mono text-[12px] text-gray-700">
                     {m.montantTotal.toLocaleString()}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                     {!m.praticien && m.statut === 'EN_ATTENTE' ? (
                       <button
-                        onClick={() => handleAssigner(m.id)}
+                        onClick={e => handleAssigner(e, m.id)}
                         className="text-[11px] font-bold bg-yellow-50 text-yellow-700 border border-yellow-200 rounded-lg px-2 py-1 hover:bg-yellow-100 transition whitespace-nowrap"
                       >
                         Assigner
                       </button>
                     ) : (
-                      <button className="text-[11px] font-bold bg-gray-50 text-gray-600 border border-gray-200 rounded-lg px-2 py-1 hover:bg-gray-100 transition">
-                        Voir
-                      </button>
+                      <span className="text-[11px] text-gray-400">→</span>
                     )}
                   </td>
                 </tr>

@@ -128,8 +128,11 @@ export async function getMission(req: AuthRequest, res: Response): Promise<void>
     include: {
       patient: { select: { nom: true, prenom: true, telephone: true } },
       praticien: {
-        include: { user: { select: { nom: true, prenom: true, telephone: true } } },
-      },
+  include: {
+    user: { select: { nom: true, prenom: true, telephone: true } },
+    specialites: true,
+  },
+},
       compteRendu: true,
       paiement: true,
       avis: true,
