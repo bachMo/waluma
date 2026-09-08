@@ -201,11 +201,18 @@ export async function creerPraticien(req: Request, res: Response): Promise<void>
     prenom, nom, telephone, specialite,
     numeroOrdre, anneesExperience, bio,
     zoneIntervention, commission,
-    operateurMM, numeroMM,
+    moyensPaiement, accepteEspeces,
   } = req.body
 
   if (!prenom || !nom || !telephone || !specialite) {
     res.status(400).json({ error: 'Champs obligatoires manquants' })
+    return
+  }
+
+  // Validation téléphone sénégalais
+  const telRegex = /^\+221(70|75|76|77|78)\d{7}$/
+  if (!telRegex.test(telephone.replace(/\s/g, ''))) {
+    res.status(400).json({ error: 'Format téléphone invalide : +221 suivi de 70/75/76/77/78 + 7 chiffres' })
     return
   }
 
@@ -215,33 +222,80 @@ export async function creerPraticien(req: Request, res: Response): Promise<void>
     return
   }
 
+  // Parser moyensPaiement si c'est une string JSON
+  let parsedMoyens: { operateur: string; numero: string }[] = []
+  if (moyensPaiement) {
+    parsedMoyens = typeof moyensPaiement === 'string'
+      ? JSON.parse(moyensPaiement)
+      : moyensPaiement
+  }
+
+  // Parser zoneIntervention
+  let parsedZone: string[] = []
+  if (zoneIntervention) {
+    parsedZone = typeof zoneIntervention === 'string'
+      ? JSON.parse(zoneIntervention)
+      : zoneIntervention
+  }
+
   const user = await prisma.user.create({
     data: {
-      telephone,
+      telephone: telephone.replace(/\s/g, ''),
       nom,
       prenom,
       role: 'PRATICIEN',
       praticien: {
         create: {
           numeroOrdre,
-          anneesExperience: anneesExperience || 0,
+          anneesExperience: parseInt(anneesExperience) || 0,
           bio,
-          zoneIntervention: zoneIntervention || [],
+          zoneIntervention: parsedZone,
           statutCompte: 'EN_ATTENTE',
           disponible: false,
-          commission: commission || 10,
-          operateurMM,
-          numeroMM,
+          commission: parseFloat(commission) || 10,
+          accepteEspeces: accepteEspeces === 'true' || accepteEspeces === true,
           specialites: {
             create: [{ specialite, principale: true }],
           },
+          moyensPaiement: parsedMoyens.length > 0 ? {
+            create: parsedMoyens.map(m => ({
+              operateur: m.operateur as never,
+              numero: m.numero.replace(/\s/g, ''),
+            })),
+          } : undefined,
         },
       },
     },
-    include: { praticien: true },
+    include: { praticien: { include: { specialites: true, moyensPaiement: true } } },
   })
 
-  // TODO : envoyer SMS avec identifiants temporaires
+  // Upload des documents si présents
+  const praticienId = user.praticien!.id
+  const files = req.files as Express.Multer.File[] | undefined
+
+  if (files && files.length > 0) {
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i]
+      const docType = req.body[`documents[${i}][type]`] || 'AUTRE'
+
+      const url = await uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        `praticiens/${praticienId}/documents`
+      )
+
+      await prisma.document.create({
+        data: {
+          praticienId,
+          type: docType,
+          url,
+          nom: file.originalname,
+          statut: 'EN_ATTENTE',
+        },
+      })
+    }
+  }
 
   res.status(201).json({ message: 'Praticien créé', user })
 }

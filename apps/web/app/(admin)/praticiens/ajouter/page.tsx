@@ -1,11 +1,12 @@
 'use client'
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Topbar from '@/components/admin/Topbar'
 import api from '@/lib/api'
+import { REGIONS_SENEGAL } from '@/lib/senegal-geo'
 
-const specialites = [
-  { value: 'INFIRMIER', label: 'Infirmier/ère diplômé(e) d\'État' },
+const SPECIALITES = [
+  { value: 'INFIRMIER', label: 'Infirmier/ère IDE' },
   { value: 'MEDECIN_GENERALISTE', label: 'Médecin généraliste' },
   { value: 'SAGE_FEMME', label: 'Sage-femme' },
   { value: 'KINESITHERAPEUTE', label: 'Kinésithérapeute' },
@@ -14,48 +15,149 @@ const specialites = [
   { value: 'AUTRE', label: 'Autre' },
 ]
 
+const TYPES_DOCUMENT = [
+  { value: 'DIPLOME', label: 'Diplôme' },
+  { value: 'CNI', label: "Carte Nationale d'Identité" },
+  { value: 'CASIER_JUDICIAIRE', label: 'Casier judiciaire' },
+  { value: 'ORDRE_PROFESSIONNEL', label: "Numéro d'ordre professionnel" },
+  { value: 'AUTRE', label: 'Autre document' },
+]
+
+const OPERATEURS_MM = [
+  { value: 'WAVE', label: 'Wave' },
+  { value: 'ORANGE_MONEY', label: 'Orange Money' },
+  { value: 'FREE_MONEY', label: 'Free Money' },
+]
+
+interface MoyenPaiement {
+  operateur: string
+  numero: string
+}
+
+interface Document {
+  type: string
+  file: File
+  nom: string
+}
+
+function validerTelephone(tel: string): boolean {
+  const regex = /^\+221(70|75|76|77|78)\d{7}$/
+  return regex.test(tel.replace(/\s/g, ''))
+}
+
 export default function AjouterPraticienPage() {
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
+  const [errors, setErrors] = useState<Record<string, string>>({})
 
-  const [form, setForm] = useState({
-    prenom: '', nom: '', telephone: '', dateNaissance: '', sexe: '',
-    zone: '', specialite: 'INFIRMIER', numeroOrdre: '',
-    anneesExperience: '', bio: '', commission: '10',
-    operateurMM: 'WAVE', numeroMM: '',
-  })
+  // Infos personnelles
+  const [prenom, setPrenom] = useState('')
+  const [nom, setNom] = useState('')
+  const [telephone, setTelephone] = useState('+221')
+  const [specialite, setSpecialite] = useState('INFIRMIER')
+  const [numeroOrdre, setNumeroOrdre] = useState('')
+  const [anneesExp, setAnneesExp] = useState('')
+  const [bio, setBio] = useState('')
 
-  function set(field: string, value: string) {
-    setForm(f => ({ ...f, [field]: value }))
+  // Zone d'intervention
+  const [regionSelectionnee, setRegionSelectionnee] = useState('')
+  const [modeZone, setModeZone] = useState<'region' | 'departements'>('region')
+  const [departementsSelectionnes, setDepartementsSelectionnes] = useState<string[]>([])
+
+  // Moyens de paiement
+  const [moyensPaiement, setMoyensPaiement] = useState<MoyenPaiement[]>([])
+  const [accepteEspeces, setAccepteEspeces] = useState(false)
+
+  // Documents
+  const [documents, setDocuments] = useState<Document[]>([])
+  const [docType, setDocType] = useState('DIPLOME')
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const region = REGIONS_SENEGAL.find(r => r.nom === regionSelectionnee)
+
+  function toggleDepartement(dep: string) {
+    setDepartementsSelectionnes(prev =>
+      prev.includes(dep) ? prev.filter(d => d !== dep) : [...prev, dep]
+    )
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  function addMoyenPaiement(operateur: string) {
+    if (moyensPaiement.find(m => m.operateur === operateur)) return
+    setMoyensPaiement(prev => [...prev, { operateur, numero: '+221' }])
+  }
+
+  function removeMoyenPaiement(operateur: string) {
+    setMoyensPaiement(prev => prev.filter(m => m.operateur !== operateur))
+  }
+
+  function updateNumeroMM(operateur: string, numero: string) {
+    setMoyensPaiement(prev => prev.map(m => m.operateur === operateur ? { ...m, numero } : m))
+  }
+
+  function handleDocFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setDocuments(prev => [...prev, { type: docType, file, nom: file.name }])
+    if (fileRef.current) fileRef.current.value = ''
+  }
+
+  function removeDoc(index: number) {
+    setDocuments(prev => prev.filter((_, i) => i !== index))
+  }
+
+  function validate(): boolean {
+    const newErrors: Record<string, string> = {}
+    if (!prenom.trim()) newErrors.prenom = 'Prénom requis'
+    if (!nom.trim()) newErrors.nom = 'Nom requis'
+    if (!validerTelephone(telephone)) newErrors.telephone = 'Format invalide : +221 suivi de 70/75/76/77/78 et 7 chiffres'
+    if (!regionSelectionnee) newErrors.zone = 'Choisissez une région'
+    if (modeZone === 'departements' && departementsSelectionnes.length === 0) newErrors.zone = 'Choisissez au moins un département'
+    if (moyensPaiement.length === 0 && !accepteEspeces) newErrors.paiement = 'Choisissez au moins un moyen de paiement'
+    moyensPaiement.forEach(m => {
+      if (!validerTelephone(m.numero)) newErrors[`mm_${m.operateur}`] = `Numéro ${m.operateur} invalide`
+    })
+    setErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  async function handleSubmit() {
+    if (!validate()) return
+    setSaving(true)
     setError('')
-    setLoading(true)
+
     try {
-      await api.post('/praticiens/creer', {
-        prenom: form.prenom,
-        nom: form.nom,
-        telephone: form.telephone,
-        specialite: form.specialite,
-        numeroOrdre: form.numeroOrdre,
-        anneesExperience: parseInt(form.anneesExperience) || 0,
-        bio: form.bio,
-        zoneIntervention: form.zone.split(',').map(z => z.trim()).filter(Boolean),
-        commission: parseFloat(form.commission) || 10,
-        operateurMM: form.operateurMM,
-        numeroMM: form.numeroMM,
+      const zoneIntervention = modeZone === 'region'
+        ? [regionSelectionnee]
+        : departementsSelectionnes
+
+      const formData = new FormData()
+      formData.append('prenom', prenom)
+      formData.append('nom', nom)
+      formData.append('telephone', telephone.replace(/\s/g, ''))
+      formData.append('specialite', specialite)
+      formData.append('numeroOrdre', numeroOrdre)
+      formData.append('anneesExperience', anneesExp || '0')
+      formData.append('bio', bio)
+      formData.append('zoneIntervention', JSON.stringify(zoneIntervention))
+      formData.append('moyensPaiement', JSON.stringify(moyensPaiement))
+      formData.append('accepteEspeces', String(accepteEspeces))
+
+      documents.forEach((doc, i) => {
+        formData.append(`documents[${i}][type]`, doc.type)
+        formData.append(`documents[${i}][file]`, doc.file)
       })
-      setSuccess(true)
-      setTimeout(() => router.push('/praticiens'), 1500)
-    } catch (err: unknown) {
-      const e = err as { response?: { data?: { error?: string } } }
-      setError(e?.response?.data?.error ?? 'Erreur lors de la création')
+
+      await api.post('/praticiens/creer', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+
+      router.push('/praticiens')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setError(err?.response?.data?.error || 'Erreur lors de la création')
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
@@ -65,134 +167,207 @@ export default function AjouterPraticienPage() {
         <button onClick={() => router.push('/praticiens')} className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
           Annuler
         </button>
-        <button form="form-praticien" type="submit" disabled={loading} className="text-xs font-bold bg-[#0d5068] text-white rounded-lg px-3 py-1.5 hover:bg-[#0a3f52] transition disabled:opacity-50">
-          {loading ? 'Création...' : '✓ Créer le compte'}
+        <button
+          onClick={handleSubmit}
+          disabled={saving}
+          className="text-xs font-bold bg-[#22c55e] text-white rounded-lg px-3 py-1.5 hover:bg-[#16a34a] transition disabled:opacity-50"
+        >
+          {saving ? 'Création...' : 'Créer le praticien'}
         </button>
       </Topbar>
 
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mb-5">
           <h1 className="font-extrabold text-xl text-gray-900 tracking-tight">Nouveau praticien</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Un SMS avec les identifiants temporaires sera envoyé automatiquement.</p>
+          <p className="text-sm text-gray-400 mt-0.5">Le praticien sera en attente de validation avant de pouvoir exercer.</p>
         </div>
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-5">{error}</div>
         )}
-        {success && (
-          <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl px-4 py-3 mb-5">✓ Compte créé. Redirection...</div>
-        )}
 
-        <div className="bg-[#e0f2fe] border border-[#0d5068]/20 rounded-xl px-4 py-3 text-sm text-[#0d5068] mb-6">
-          Un mot de passe temporaire sera généré automatiquement. Le praticien devra le changer à sa première connexion.
-        </div>
+        <div className="space-y-5 max-w-4xl">
 
-        <form id="form-praticien" onSubmit={handleSubmit}>
-          <div className="grid grid-cols-2 gap-5">
-
-            {/* Infos personnelles */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <div className="text-sm font-bold text-gray-800 mb-4">Informations personnelles</div>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Prénom <span className="text-red-500">*</span></label>
-                  <input required value={form.prenom} onChange={e => set('prenom', e.target.value)} type="text" placeholder="Aminata" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Nom <span className="text-red-500">*</span></label>
-                  <input required value={form.nom} onChange={e => set('nom', e.target.value)} type="text" placeholder="Diallo" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-                </div>
-              </div>
-              <div className="mb-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Téléphone <span className="text-red-500">*</span></label>
-                <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:border-[#0d5068]">
-                  <span className="px-3 py-2 bg-gray-50 text-sm font-semibold text-gray-500 border-r border-gray-200">🇸🇳 +221</span>
-                  <input required value={form.telephone} onChange={e => set('telephone', '+221' + e.target.value.replace('+221', ''))} type="tel" placeholder="77 000 00 00" className="flex-1 px-3 py-2 text-sm outline-none" />
-                </div>
-                <p className="text-[11px] text-gray-400 mt-1">Ce numéro servira d&apos;identifiant unique.</p>
-              </div>
-              <div className="mb-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Zone d&apos;intervention <span className="text-red-500">*</span></label>
-                <input required value={form.zone} onChange={e => set('zone', e.target.value)} type="text" placeholder="Almadies, Mermoz, Plateau..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-                <p className="text-[11px] text-gray-400 mt-1">Séparez les zones par des virgules.</p>
-              </div>
-            </div>
-
-            {/* Infos professionnelles */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <div className="text-sm font-bold text-gray-800 mb-4">Informations professionnelles</div>
-              <div className="mb-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Spécialité principale <span className="text-red-500">*</span></label>
-                <select value={form.specialite} onChange={e => set('specialite', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none">
-                  {specialites.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                </select>
-              </div>
-              <div className="mb-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Numéro d&apos;ordre professionnel</label>
-                <input value={form.numeroOrdre} onChange={e => set('numeroOrdre', e.target.value)} type="text" placeholder="INF-SN-2018-04821" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-              </div>
-              <div className="mb-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Années d&apos;expérience</label>
-                <input value={form.anneesExperience} onChange={e => set('anneesExperience', e.target.value)} type="number" min="0" max="50" placeholder="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-              </div>
-              <div className="mb-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Biographie courte</label>
-                <textarea value={form.bio} onChange={e => set('bio', e.target.value)} rows={3} placeholder="Description visible par les patients..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] resize-none" />
+          {/* Informations personnelles */}
+          <div className="bg-white border border-gray-100 rounded-xl p-5">
+            <h2 className="text-sm font-bold text-gray-800 mb-4">Informations personnelles</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Prénom <span className="text-red-500">*</span></label>
+                <input value={prenom} onChange={e => setPrenom(e.target.value)} type="text" className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors.prenom ? 'border-red-300' : 'border-gray-200'}`} />
+                {errors.prenom && <p className="text-xs text-red-500 mt-1">{errors.prenom}</p>}
               </div>
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Commission Waluma (%)</label>
-                <input value={form.commission} onChange={e => set('commission', e.target.value)} type="number" min="0" max="100" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-                <p className="text-[11px] text-gray-400 mt-1">Taux par défaut : 10%</p>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nom <span className="text-red-500">*</span></label>
+                <input value={nom} onChange={e => setNom(e.target.value)} type="text" className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors.nom ? 'border-red-300' : 'border-gray-200'}`} />
+                {errors.nom && <p className="text-xs text-red-500 mt-1">{errors.nom}</p>}
               </div>
-            </div>
-
-            {/* Documents */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <div className="text-sm font-bold text-gray-800 mb-4">Documents de vérification</div>
-              <p className="text-xs text-gray-400 mb-3">Les documents peuvent être ajoutés après la création du compte depuis la fiche du praticien.</p>
-              {[
-                { label: 'Diplôme ou attestation de qualification', required: true },
-                { label: 'Inscription à l\'ordre professionnel', required: true },
-                { label: 'Pièce d\'identité nationale (CNI)', required: true },
-                { label: 'Casier judiciaire bulletin n°3', required: false },
-              ].map((doc) => (
-                <div key={doc.label} className="flex items-center gap-3 border border-dashed border-gray-200 rounded-lg px-3 py-2.5 mb-2 cursor-pointer hover:border-[#0d5068] transition">
-                  <div className="w-7 h-7 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400 text-sm flex-shrink-0">📄</div>
-                  <div>
-                    <div className="text-xs font-semibold text-gray-700">{doc.label}{doc.required && <span className="text-red-500 ml-1">*</span>}</div>
-                    <div className="text-[10px] text-gray-400">PDF ou image · 5 MB max · Cliquer pour uploader</div>
-                  </div>
-                  <div className="ml-auto text-gray-300 text-sm">↑</div>
-                </div>
-              ))}
-            </div>
-
-            {/* Paiement */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <div className="text-sm font-bold text-gray-800 mb-4">Moyen de paiement</div>
-              <div className="mb-3">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Opérateur principal <span className="text-red-500">*</span></label>
-                <select value={form.operateurMM} onChange={e => set('operateurMM', e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none">
-                  <option value="WAVE">Wave</option>
-                  <option value="ORANGE_MONEY">Orange Money</option>
-                  <option value="FREE_MONEY">Free Money</option>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Téléphone <span className="text-red-500">*</span></label>
+                <input value={telephone} onChange={e => setTelephone(e.target.value)} type="tel" placeholder="+221 77 000 00 00" className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors.telephone ? 'border-red-300' : 'border-gray-200'}`} />
+                {errors.telephone
+                  ? <p className="text-xs text-red-500 mt-1">{errors.telephone}</p>
+                  : <p className="text-xs text-gray-400 mt-1">Format : +221 suivi de 70/75/76/77/78 + 7 chiffres</p>
+                }
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Spécialité <span className="text-red-500">*</span></label>
+                <select value={specialite} onChange={e => setSpecialite(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none">
+                  {SPECIALITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
               </div>
-              <div className="mb-4">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Numéro Mobile Money <span className="text-red-500">*</span></label>
-                <div className="flex border border-gray-200 rounded-lg overflow-hidden focus-within:border-[#0d5068]">
-                  <span className="px-3 py-2 bg-gray-50 text-sm font-semibold text-gray-500 border-r border-gray-200">🇸🇳 +221</span>
-                  <input value={form.numeroMM} onChange={e => set('numeroMM', e.target.value)} type="tel" placeholder="77 000 00 00" className="flex-1 px-3 py-2 text-sm outline-none" />
-                </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Numéro d'ordre professionnel</label>
+                <input value={numeroOrdre} onChange={e => setNumeroOrdre(e.target.value)} type="text" placeholder="Ex : INF-SN-2020-04821" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
               </div>
-              <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-                <div className="text-xs font-bold text-green-700 mb-1">Compte activé à la création</div>
-                <div className="text-[11px] text-green-600">Le praticien reçoit ses identifiants temporaires par SMS dès que vous cliquez sur &quot;Créer le compte&quot;.</div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Années d'expérience</label>
+                <input value={anneesExp} onChange={e => setAnneesExp(e.target.value)} type="number" min="0" placeholder="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
+              </div>
+              <div className="col-span-2">
+                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Biographie</label>
+                <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} placeholder="Présentation du praticien..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] resize-none" />
               </div>
             </div>
-
           </div>
-        </form>
+
+          {/* Zone d'intervention */}
+          <div className="bg-white border border-gray-100 rounded-xl p-5">
+            <h2 className="text-sm font-bold text-gray-800 mb-4">Zone d'intervention <span className="text-red-500">*</span></h2>
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Région</label>
+              <select
+                value={regionSelectionnee}
+                onChange={e => { setRegionSelectionnee(e.target.value); setDepartementsSelectionnes([]); setModeZone('region') }}
+                className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none ${errors.zone ? 'border-red-300' : 'border-gray-200'}`}
+              >
+                <option value="">Choisir une région...</option>
+                {REGIONS_SENEGAL.map(r => <option key={r.code} value={r.nom}>{r.nom}</option>)}
+              </select>
+              {errors.zone && <p className="text-xs text-red-500 mt-1">{errors.zone}</p>}
+            </div>
+
+            {region && (
+              <>
+                <div className="flex gap-3 mb-4">
+                  <button
+                    onClick={() => { setModeZone('region'); setDepartementsSelectionnes([]) }}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${modeZone === 'region' ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
+                  >
+                    Toute la région {region.nom}
+                  </button>
+                  <button
+                    onClick={() => setModeZone('departements')}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${modeZone === 'departements' ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
+                  >
+                    Choisir des départements
+                  </button>
+                </div>
+
+                {modeZone === 'departements' && (
+                  <div className="flex flex-wrap gap-2">
+                    {region.departements.map(dep => (
+                      <button
+                        key={dep}
+                        onClick={() => toggleDepartement(dep)}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${departementsSelectionnes.includes(dep) ? 'bg-[#22c55e] text-white border-[#22c55e]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
+                      >
+                        {dep}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Moyens de paiement */}
+          <div className="bg-white border border-gray-100 rounded-xl p-5">
+            <h2 className="text-sm font-bold text-gray-800 mb-1">Moyens de paiement <span className="text-red-500">*</span></h2>
+            <p className="text-xs text-gray-400 mb-4">Au moins un moyen de paiement requis</p>
+            {errors.paiement && <p className="text-xs text-red-500 mb-3">{errors.paiement}</p>}
+
+            <div className="flex flex-wrap gap-2 mb-4">
+              {OPERATEURS_MM.map(op => {
+                const selected = !!moyensPaiement.find(m => m.operateur === op.value)
+                return (
+                  <button
+                    key={op.value}
+                    onClick={() => selected ? removeMoyenPaiement(op.value) : addMoyenPaiement(op.value)}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${selected ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
+                  >
+                    {selected ? '✓ ' : ''}{op.label}
+                  </button>
+                )
+              })}
+              <button
+                onClick={() => setAccepteEspeces(!accepteEspeces)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${accepteEspeces ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
+              >
+                {accepteEspeces ? '✓ ' : ''}Espèces
+              </button>
+            </div>
+
+            {moyensPaiement.map(m => (
+              <div key={m.operateur} className="flex items-center gap-3 mb-3">
+                <span className="text-xs font-semibold text-gray-600 w-28 flex-shrink-0">{m.operateur}</span>
+                <div className="flex-1">
+                  <input
+                    value={m.numero}
+                    onChange={e => updateNumeroMM(m.operateur, e.target.value)}
+                    type="tel"
+                    placeholder="+221 77 000 00 00"
+                    className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors[`mm_${m.operateur}`] ? 'border-red-300' : 'border-gray-200'}`}
+                  />
+                  {errors[`mm_${m.operateur}`] && <p className="text-xs text-red-500 mt-1">{errors[`mm_${m.operateur}`]}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Documents de vérification */}
+          <div className="bg-white border border-gray-100 rounded-xl p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-sm font-bold text-gray-800">Documents de vérification</h2>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${documents.length === 0 ? 'bg-gray-100 text-gray-500' : 'bg-green-50 text-green-700'}`}>
+                {documents.length} document{documents.length > 1 ? 's' : ''} ajouté{documents.length > 1 ? 's' : ''}
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">Diplôme, CNI, casier judiciaire...</p>
+
+            <div className="flex items-center gap-3 mb-4">
+              <select
+                value={docType}
+                onChange={e => setDocType(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none"
+              >
+                {TYPES_DOCUMENT.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+              </select>
+              <label className="flex items-center gap-2 text-xs font-bold bg-[#0d5068] text-white rounded-lg px-3 py-2 cursor-pointer hover:bg-[#0a3f52] transition">
+                + Ajouter un fichier
+                <input ref={fileRef} type="file" accept=".pdf,image/jpeg,image/png" onChange={handleDocFile} className="hidden" />
+              </label>
+              <span className="text-xs text-gray-400">PDF, JPG, PNG · 5 MB max</span>
+            </div>
+
+            {documents.length > 0 && (
+              <div className="space-y-2">
+                {documents.map((doc, i) => (
+                  <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
+                    <div className="w-6 h-6 rounded bg-[#0d5068]/10 flex items-center justify-center text-xs">📄</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold text-gray-700 truncate">{doc.nom}</p>
+                      <p className="text-[10px] text-gray-400">{TYPES_DOCUMENT.find(t => t.value === doc.type)?.label}</p>
+                    </div>
+                    <button onClick={() => removeDoc(i)} className="text-xs text-red-500 hover:text-red-700 font-semibold">Retirer</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+        </div>
       </div>
     </div>
   )

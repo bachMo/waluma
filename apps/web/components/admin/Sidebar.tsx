@@ -1,111 +1,125 @@
 'use client'
 import Link from 'next/link'
-import { usePathname, useRouter } from 'next/navigation'
+import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/store/auth.store'
+import api from '@/lib/api'
 
-const navItems = [
-  { href: '/dashboard',    label: 'Tableau de bord', icon: '▦',  badge: null },
-  { href: '/praticiens',   label: 'Praticiens',       icon: '👤', badge: '3'  },
-  { href: '/missions',     label: 'Missions',         icon: '📍', badge: '7'  },
-  { href: '/litiges',      label: 'Litiges',          icon: '⚠️', badge: '3'  },
-  { href: '/statistiques', label: 'Statistiques',     icon: '📊', badge: null },
-  { href: '/articles',     label: 'Articles santé',   icon: '📰', badge: null },
-  { href: '/parametres',   label: 'Paramètres',       icon: '⚙️', badge: null },
-]
+interface Badges {
+  praticiensEnAttente: number
+  missionsActives: number
+  litigesOuverts: number
+}
 
 export default function Sidebar() {
   const pathname = usePathname()
-  const router = useRouter()
   const { user, logout } = useAuthStore()
+  const [badges, setBadges] = useState<Badges>({ praticiensEnAttente: 0, missionsActives: 0, litigesOuverts: 0 })
 
-  function handleLogout() {
-    document.cookie = 'waluma_access_token=; path=/; max-age=0'
-    logout()
-    router.push('/login')
-  }
+  useEffect(() => {
+    async function loadBadges() {
+      try {
+        const { data } = await api.get('/stats/badges')
+        setBadges(data)
+      } catch {}
+    }
+    loadBadges()
+    const interval = setInterval(loadBadges, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const navItems = [
+    { href: '/dashboard', label: 'Tableau de bord', icon: '▦', badge: null },
+    { href: '/praticiens', label: 'Praticiens', icon: '👤', badge: badges.praticiensEnAttente || null },
+    { href: '/missions', label: 'Missions', icon: '📍', badge: badges.missionsActives || null },
+    { href: '/litiges', label: 'Litiges', icon: '⚠️', badge: badges.litigesOuverts || null },
+    { href: '/statistiques', label: 'Statistiques', icon: '📊', badge: null },
+    { href: '/articles', label: 'Articles santé', icon: '📰', badge: null },
+    { href: '/parametres', label: 'Paramètres', icon: '⚙️', badge: null },
+  ]
+
+  const initials = user ? `${user.prenom?.[0] ?? ''}${user.nom?.[0] ?? ''}` : 'AD'
+  const fullName = user ? `${user.prenom} ${user.nom}` : 'Administrateur'
 
   return (
-    <aside className="w-[220px] bg-[#0d5068] flex flex-col min-h-screen flex-shrink-0">
+    <aside className="w-[220px] flex-shrink-0 bg-[#0d5068] flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 py-5">
-        <svg width="28" height="28" viewBox="0 0 36 36" fill="none">
-          <path d="M4 8L11 26L18 12L25 26L32 8" stroke="#22c55e" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M11 26L18 12L25 26" stroke="#86efac" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" opacity=".5"/>
-        </svg>
-        <span className="font-extrabold text-[17px] text-white tracking-tight">
-          W<span className="text-[#4ade80]">aluma</span>
-        </span>
+      <div className="px-5 py-5 border-b border-white/10">
+        <div className="flex items-baseline gap-0.5">
+          <span className="text-2xl font-extrabold text-white tracking-tight">W</span>
+          <span className="text-2xl font-extrabold text-[#4ade80] tracking-tight">aluma</span>
+        </div>
+        <p className="text-[10px] text-white/40 mt-0.5 font-medium tracking-wider uppercase">Administration</p>
       </div>
 
-      {/* Admin info */}
-      <div className="mx-2 mb-3 bg-white/[0.07] rounded-xl px-3 py-2.5 flex items-center gap-2.5">
-        <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
-          {user?.prenom?.[0]}{user?.nom?.[0]}
-        </div>
-        <div>
-          <div className="text-white text-[13px] font-semibold leading-tight">
-            {user?.prenom} {user?.nom}
+      {/* User */}
+      <div className="px-4 py-3 border-b border-white/10">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg bg-[#22c55e] flex items-center justify-center text-[11px] font-bold text-white flex-shrink-0">
+            {initials}
           </div>
-          <div className="text-white/40 text-[11px]">Super admin</div>
+          <div className="min-w-0">
+            <p className="text-[12px] font-semibold text-white truncate">{fullName}</p>
+            <p className="text-[10px] text-white/40">Super admin</p>
+          </div>
         </div>
       </div>
 
-      {/* Nav Principal */}
-      <div className="text-[10px] font-bold tracking-widest uppercase text-white/20 px-4 mt-2 mb-1">Principal</div>
-      <nav className="px-2 space-y-0.5">
-        {navItems.slice(0, 4).map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + '/')
+      {/* Nav */}
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 px-2 mb-2">Principal</p>
+        {navItems.slice(0, 4).map(item => {
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition border-l-2 ${
-                active
-                  ? 'bg-[#22c55e]/12 text-[#4ade80] border-[#22c55e] font-semibold'
-                  : 'text-white/50 border-transparent hover:bg-white/7 hover:text-white/80'
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-[13px] font-medium ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/8'
               }`}
             >
-              <span className="text-base">{item.icon}</span>
-              <span className="flex-1">{item.label}</span>
-              {item.badge && (
-                <span className="bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+              {isActive && <div className="absolute left-0 w-0.5 h-6 bg-[#22c55e] rounded-r-full" />}
+              <span className="text-base leading-none">{item.icon}</span>
+              <span className="flex-1 truncate">{item.label}</span>
+              {item.badge !== null && item.badge !== undefined && item.badge > 0 && (
+                <span className="flex-shrink-0 min-w-[18px] h-[18px] bg-[#22c55e] text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1">
                   {item.badge}
                 </span>
               )}
             </Link>
           )
         })}
-      </nav>
 
-      {/* Nav Gestion */}
-      <div className="text-[10px] font-bold tracking-widest uppercase text-white/20 px-4 mt-4 mb-1">Gestion</div>
-      <nav className="px-2 space-y-0.5">
-        {navItems.slice(4).map((item) => {
-          const active = pathname === item.href || pathname.startsWith(item.href + '/')
+        <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 px-2 mb-2 mt-4">Gestion</p>
+        {navItems.slice(4).map(item => {
+          const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
           return (
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-[13px] font-medium transition border-l-2 ${
-                active
-                  ? 'bg-[#22c55e]/12 text-[#4ade80] border-[#22c55e] font-semibold'
-                  : 'text-white/50 border-transparent hover:bg-white/7 hover:text-white/80'
+              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-[13px] font-medium ${
+                isActive
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/60 hover:text-white hover:bg-white/8'
               }`}
             >
-              <span className="text-base">{item.icon}</span>
-              <span className="flex-1">{item.label}</span>
+              <span className="text-base leading-none">{item.icon}</span>
+              <span className="flex-1 truncate">{item.label}</span>
             </Link>
           )
         })}
       </nav>
 
       {/* Logout */}
-      <div className="mt-auto p-2 border-t border-white/[0.06]">
+      <div className="px-3 py-4 border-t border-white/10">
         <button
-          onClick={handleLogout}
-          className="w-full flex items-center gap-2.5 px-3 py-2 text-white/30 hover:text-white/60 text-[13px] rounded-xl transition"
+          onClick={logout}
+          className="flex items-center gap-2.5 px-2.5 py-2 rounded-lg w-full text-[13px] font-medium text-white/50 hover:text-white hover:bg-white/8 transition-all"
         >
-          <span>→</span> Déconnexion
+          <span className="text-base">→</span>
+          <span>Déconnexion</span>
         </button>
       </div>
     </aside>
