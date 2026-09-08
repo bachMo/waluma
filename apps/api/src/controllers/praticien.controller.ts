@@ -371,3 +371,17 @@ export async function getMonProfil(req: AuthRequest, res: Response): Promise<voi
   }
   res.json(praticien)
 }
+
+// DELETE /api/praticiens/:id — supprimer un praticien (admin)
+export async function deletePraticien(req: Request, res: Response): Promise<void> {
+  const { id } = req.params
+
+  const praticien = await prisma.praticien.findUnique({ where: { id } })
+  if (!praticien) {
+    res.status(404).json({ error: 'Praticien introuvable' })
+    return
+  }
+
+  await prisma.user.delete({ where: { id: praticien.userId } })
+  res.json({ message: 'Praticien supprimé' })
+}

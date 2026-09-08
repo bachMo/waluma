@@ -13,6 +13,7 @@ import { upload } from "../middlewares/upload.middleware";
 import { creerPraticien } from '../controllers/praticien.controller'
 import { updateInfosPraticien } from '../controllers/praticien.controller'
 import { getMonProfil } from '../controllers/praticien.controller'
+import { deletePraticien } from '../controllers/praticien.controller'
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.delete("/documents/:docId", authenticate, deleteDocument);
 router.get('/me', authenticate, requireRole('PRATICIEN'), getMonProfil)
 // Commun (admin + praticien)
 router.get("/:id", authenticate, getPraticien);
+router.delete('/:id', authenticate, requireRole('ADMIN'), deletePraticien)
 
 export default router;
