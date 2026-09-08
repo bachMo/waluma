@@ -122,45 +122,47 @@ export default function AjouterPraticienPage() {
   }
 
   async function handleSubmit() {
-    if (!validate()) return
-    setSaving(true)
-    setError('')
+  if (!validate()) return
+  setSaving(true)
+  setError('')
 
-    try {
-      const zoneIntervention = modeZone === 'region'
-        ? [regionSelectionnee]
-        : departementsSelectionnes
+  try {
+    const zoneIntervention = modeZone === 'region'
+      ? [regionSelectionnee]
+      : departementsSelectionnes
 
-      const formData = new FormData()
-      formData.append('prenom', prenom)
-      formData.append('nom', nom)
-      formData.append('telephone', telephone.replace(/\s/g, ''))
-      formData.append('specialite', specialite)
-      formData.append('numeroOrdre', numeroOrdre)
-      formData.append('anneesExperience', anneesExp || '0')
-      formData.append('bio', bio)
-      formData.append('zoneIntervention', JSON.stringify(zoneIntervention))
-      formData.append('moyensPaiement', JSON.stringify(moyensPaiement))
-      formData.append('accepteEspeces', String(accepteEspeces))
+    const formData = new FormData()
+    formData.append('prenom', prenom)
+    formData.append('nom', nom)
+    formData.append('telephone', telephone.replace(/\s/g, ''))
+    formData.append('specialite', specialite)
+    formData.append('numeroOrdre', numeroOrdre)
+    formData.append('anneesExperience', anneesExp || '0')
+    formData.append('bio', bio)
+    formData.append('zoneIntervention', JSON.stringify(zoneIntervention))
+    formData.append('moyensPaiement', JSON.stringify(moyensPaiement))
+    formData.append('accepteEspeces', String(accepteEspeces))
 
-      documents.forEach((doc, i) => {
-        formData.append(`documents[${i}][type]`, doc.type)
-        formData.append(`documents[${i}][file]`, doc.file)
-      })
+    // Envoyer les types en JSON séparé
+    formData.append('documentsTypes', JSON.stringify(documents.map(d => d.type)))
 
-      await api.post('/praticiens/creer', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      })
+    // Envoyer les fichiers sous le même champ 'files'
+    documents.forEach((doc) => {
+      formData.append('files', doc.file)
+    })
 
-      router.push('/praticiens')
-    } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } }
-      setError(err?.response?.data?.error || 'Erreur lors de la création')
-    } finally {
-      setSaving(false)
-    }
+    await api.post('/praticiens/creer', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+
+    router.push('/praticiens')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { error?: string } } }
+    setError(err?.response?.data?.error || 'Erreur lors de la création')
+  } finally {
+    setSaving(false)
   }
-
+}
   return (
     <div className="flex flex-col h-full">
       <Topbar title="Ajouter un praticien">

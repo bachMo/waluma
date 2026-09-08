@@ -16,7 +16,7 @@ import { getMonProfil } from '../controllers/praticien.controller'
 
 const router = Router();
 
-router.post('/creer', authenticate, requireRole('ADMIN'), upload.any(), creerPraticien)
+router.post('/creer', authenticate, requireRole('ADMIN'), upload.array('files', 10), creerPraticien)
 // Admin
 router.get("/", authenticate, requireRole("ADMIN"), listPraticiens);
 router.patch("/:id/statut", authenticate, requireRole("ADMIN"), updateStatutPraticien);

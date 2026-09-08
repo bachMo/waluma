@@ -274,29 +274,34 @@ export async function creerPraticien(req: Request, res: Response): Promise<void>
   const files = req.files as Express.Multer.File[] | undefined
 
   if (files && files.length > 0) {
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i]
-      const docType = req.body[`documents[${i}][type]`] || 'AUTRE'
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    // Multer avec any() expose le fieldname — on récupère le type depuis le body
+    const docType = (
+      req.body[`documents[${i}][type]`] ||
+      req.body[`documents_${i}_type`] ||
+      (req.body.documentsTypes ? JSON.parse(req.body.documentsTypes)[i] : null) ||
+      'AUTRE'
+    )
 
-      const url = await uploadFile(
-        file.buffer,
-        file.originalname,
-        file.mimetype,
-        `praticiens/${praticienId}/documents`
-      )
+    const url = await uploadFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      `praticiens/${praticienId}/documents`
+    )
 
-      await prisma.document.create({
-        data: {
-          praticienId,
-          type: docType,
-          url,
-          nom: file.originalname,
-          statut: 'EN_ATTENTE',
-        },
-      })
-    }
+    await prisma.document.create({
+      data: {
+        praticienId,
+        type: docType,
+        url,
+        nom: file.originalname,
+        statut: 'EN_ATTENTE',
+      },
+    })
   }
-
+}
   res.status(201).json({ message: 'Praticien créé', user })
 }
 
