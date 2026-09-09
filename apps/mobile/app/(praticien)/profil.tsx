@@ -101,6 +101,7 @@ const sections = [
       { icon: 'document-text-outline', label: 'Mes documents', sub: `${praticien?.documents.length ?? 0} document(s)`, onPress: () => router.push('/praticien-compte/documents' as never) },
       { icon: 'location-outline', label: 'Zone d\'intervention', onPress: () => router.push('/praticien-compte/zone' as never) },
       { icon: 'medical-outline', label: 'Mes spécialités', onPress: () => router.push('/praticien-compte/specialites' as never) },
+      { icon: 'document-outline', label: 'Mes demandes', onPress: () => router.push('/praticien-compte/mes-demandes' as never) },
     ],
   },
   {

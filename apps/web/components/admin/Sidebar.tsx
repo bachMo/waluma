@@ -9,12 +9,13 @@ interface Badges {
   praticiensEnAttente: number
   missionsActives: number
   litigesOuverts: number
+  demandesEnAttente: number
 }
 
 export default function Sidebar() {
   const pathname = usePathname()
   const { user, logout } = useAuthStore()
-  const [badges, setBadges] = useState<Badges>({ praticiensEnAttente: 0, missionsActives: 0, litigesOuverts: 0 })
+  const [badges, setBadges] = useState<Badges>({ praticiensEnAttente: 0, missionsActives: 0, litigesOuverts: 0, demandesEnAttente: 0 })
 
   useEffect(() => {
     async function loadBadges() {
@@ -33,6 +34,7 @@ export default function Sidebar() {
     { href: '/praticiens', label: 'Praticiens', icon: '👤', badge: badges.praticiensEnAttente || null },
     { href: '/missions', label: 'Missions', icon: '📍', badge: badges.missionsActives || null },
     { href: '/litiges', label: 'Litiges', icon: '⚠️', badge: badges.litigesOuverts || null },
+    { href: '/demandes', label: 'Demandes', icon: '📋', badge: badges.demandesEnAttente || null },
     { href: '/statistiques', label: 'Statistiques', icon: '📊', badge: null },
     { href: '/articles', label: 'Articles santé', icon: '📰', badge: null },
     { href: '/parametres', label: 'Paramètres', icon: '⚙️', badge: null },

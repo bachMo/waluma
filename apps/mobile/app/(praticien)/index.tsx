@@ -298,5 +298,6 @@ const s = StyleSheet.create({
   missionAddr: { fontSize: 11, color: '#b4b2a9' },
   missionRight: { alignItems: 'flex-end' },
   missionMontant: { fontSize: 13, fontWeight: '700', color: '#0d5068', marginBottom: 3 },
+  
   missionDate: { fontSize: 10, color: '#b4b2a9' },
 })

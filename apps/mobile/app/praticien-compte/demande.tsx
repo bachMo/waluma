@@ -53,7 +53,7 @@ export default function DemandeScreen() {
               Alert.alert(
                 '✓ Demande envoyée',
                 'L\'équipe Waluma a été notifiée. Vous recevrez une réponse dans les 48h.',
-                [{ text: 'OK', onPress: () => router.back() }]
+                [{ text: 'OK', onPress: () => router.replace('/praticien-compte/mes-demandes' as never) }]
               )
             } catch {
               Alert.alert('Erreur', 'Impossible d\'envoyer la demande. Réessayez.')

@@ -107,10 +107,11 @@ export async function getDashboardStats(req: Request, res: Response): Promise<vo
 
 // GET /api/stats/badges — compteurs pour la sidebar
 export async function getBadges(req: Request, res: Response): Promise<void> {
-  const [praticiensEnAttente, missionsActives, litigesOuverts] = await Promise.all([
+  const [praticiensEnAttente, missionsActives, litigesOuverts, demandesEnAttente] = await Promise.all([
     prisma.praticien.count({ where: { statutCompte: 'EN_ATTENTE' } }),
     prisma.mission.count({ where: { statut: { in: ['EN_ATTENTE', 'ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'] } } }),
     prisma.litige.count({ where: { statut: 'OUVERT' } }),
+    prisma.demande.count({ where: { statut: 'EN_ATTENTE' } }),
   ])
-  res.json({ praticiensEnAttente, missionsActives, litigesOuverts })
+  res.json({ praticiensEnAttente, missionsActives, litigesOuverts, demandesEnAttente })
 }

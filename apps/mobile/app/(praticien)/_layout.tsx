@@ -55,6 +55,7 @@ export default function PraticienLayout() {
       <Tabs.Screen name="mission" options={{ href: null }} />
       <Tabs.Screen name="compte-rendu" options={{ href: null }} />
       <Tabs.Screen name="compte" options={{ href: null }} />
+      <Tabs.Screen name="mes-demandes" options={{ href: null }} />
     </Tabs>
   )
 }
