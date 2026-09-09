@@ -1,6 +1,6 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, StatusBar, Dimensions
+  StyleSheet, SafeAreaView, StatusBar, Dimensions, Image, Alert
 } from 'react-native'
 import { router } from 'expo-router'
 import { useEffect, useState } from 'react'
@@ -12,15 +12,15 @@ import { LinearGradient } from 'expo-linear-gradient'
 const { width } = Dimensions.get('window')
 
 const SPECIALITES = [
-  { key: 'INFIRMIER', label: 'Soins infirmiers', prix: '8 000', icon: 'needle', lib: 'MaterialCommunityIcons', color: '#0d5068', bg: '#e0f2fe' },
-  { key: 'MEDECIN_GENERALISTE', label: 'Médecin généraliste', prix: '15 000', icon: 'stethoscope', lib: 'MaterialCommunityIcons', color: '#7c3aed', bg: '#ede9fe' },
-  { key: 'PRELEVEUR', label: 'Prélèvement', prix: '5 000', icon: 'test-tube', lib: 'MaterialCommunityIcons', color: '#0891b2', bg: '#cffafe' },
-  { key: 'KINESITHERAPEUTE', label: 'Kinéthérapie', prix: '12 000', icon: 'human-handsup', lib: 'MaterialCommunityIcons', color: '#d97706', bg: '#fef3c7' },
-  { key: 'SAGE_FEMME', label: 'Sage-femme', prix: '12 000', icon: 'baby-carriage', lib: 'MaterialCommunityIcons', color: '#db2777', bg: '#fce7f3' },
-  { key: 'PEDIATRE', label: 'Pédiatre', prix: '15 000', icon: 'emoticon-happy-outline', lib: 'MaterialCommunityIcons', color: '#16a34a', bg: '#dcfce7' },
+  { key: 'INFIRMIER', label: 'Soins infirmiers', prix: '8 000', icon: 'needle', color: '#0d5068', bg: '#e0f2fe' },
+  { key: 'MEDECIN_GENERALISTE', label: 'Médecin généraliste', prix: '15 000', icon: 'stethoscope', color: '#7c3aed', bg: '#ede9fe' },
+  { key: 'PRELEVEUR', label: 'Prélèvement', prix: '5 000', icon: 'test-tube', color: '#0891b2', bg: '#cffafe' },
+  { key: 'KINESITHERAPEUTE', label: 'Kinéthérapie', prix: '12 000', icon: 'human-handsup', color: '#d97706', bg: '#fef3c7' },
+  { key: 'SAGE_FEMME', label: 'Sage-femme', prix: '12 000', icon: 'baby-carriage', color: '#db2777', bg: '#fce7f3' },
+  { key: 'PEDIATRE', label: 'Pédiatre', prix: '15 000', icon: 'emoticon-happy-outline', color: '#16a34a', bg: '#dcfce7' },
 ]
 
-interface Article { id: string; titre: string; categorie: string; auteur: string }
+interface Article { id: string; titre: string; categorie: string; auteur: string; imageUrl: string | null }
 
 export default function HomeScreen() {
   const [userName, setUserName] = useState('')
@@ -46,25 +46,18 @@ export default function HomeScreen() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" />
       <SafeAreaView style={s.safeTop}>
-        {/* Header gradient */}
         <LinearGradient colors={['#0d5068', '#0a3f52']} style={s.header}>
           <View style={s.headerTop}>
             <View>
               <Text style={s.greeting}>{greeting} 👋</Text>
               <Text style={s.userName}>{userName || '...'}</Text>
             </View>
-            <TouchableOpacity style={s.notifBtn}>
+            <TouchableOpacity style={s.notifBtn} onPress={() => Alert.alert('Notifications', 'Aucune nouvelle notification pour l\'instant.')}>
               <Ionicons name="notifications-outline" size={22} color="rgba(255,255,255,0.8)" />
               <View style={s.notifDot} />
             </TouchableOpacity>
           </View>
-
-          {/* CTA Card */}
-          <TouchableOpacity
-            style={s.ctaCard}
-            onPress={() => router.push('/(tabs)/demande')}
-            activeOpacity={0.92}
-          >
+          <TouchableOpacity style={s.ctaCard} onPress={() => router.push('/(tabs)/demande')} activeOpacity={0.92}>
             <View style={s.ctaLeft}>
               <Text style={s.ctaTitle}>Demander un soin</Text>
               <Text style={s.ctaSub}>Un professionnel chez vous en moins de 30 min</Text>
@@ -77,12 +70,10 @@ export default function HomeScreen() {
       </SafeAreaView>
 
       <ScrollView style={s.body} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
-
-        {/* Section spécialités */}
         <View style={s.section}>
           <View style={s.sectionRow}>
             <Text style={s.sectionTitle}>Soins disponibles</Text>
-            <Text style={s.sectionLink}>Voir tout</Text>
+            
           </View>
           <View style={s.specGrid}>
             {SPECIALITES.map(sp => (
@@ -102,7 +93,6 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Banner confiance */}
         <View style={s.trustBanner}>
           {[
             { icon: 'shield-checkmark', label: 'Praticiens vérifiés', color: '#22c55e' },
@@ -116,20 +106,28 @@ export default function HomeScreen() {
           ))}
         </View>
 
-        {/* Articles santé */}
         {articles.length > 0 && (
           <View style={s.section}>
             <View style={s.sectionRow}>
-              <Text style={s.sectionTitle}>Articles santé</Text>
+              <Text style={s.sectionTitle}>Derniers Articles santé</Text>
+              <TouchableOpacity onPress={() => router.push('/(tabs)/articles' as never)}>
+                <Text style={s.sectionLink}>Voir tout</Text>
+              </TouchableOpacity>
             </View>
             {articles.map(art => (
-              <TouchableOpacity key={art.id} style={s.artCard} activeOpacity={0.85}>
-                <LinearGradient
-                  colors={['#0d5068', '#0a3f52']}
-                  style={s.artThumb}
-                >
-                  <Ionicons name="newspaper-outline" size={22} color="rgba(255,255,255,0.7)" />
-                </LinearGradient>
+              <TouchableOpacity
+                key={art.id}
+                style={s.artCard}
+                activeOpacity={0.85}
+                onPress={() => router.push({ pathname: '/(tabs)/articles/[id]', params: { id: art.id } } as never)}
+              >
+                {art.imageUrl ? (
+  <Image source={{ uri: art.imageUrl }} style={s.artThumb} resizeMode="cover" />
+) : (
+  <LinearGradient colors={['#0d5068', '#0a3f52']} style={s.artThumb}>
+    <Ionicons name="newspaper-outline" size={22} color="rgba(255,255,255,0.7)" />
+  </LinearGradient>
+)}
                 <View style={s.artInfo}>
                   <View style={s.artCatWrap}>
                     <Text style={s.artCat}>{art.categorie}</Text>
@@ -158,11 +156,7 @@ const s = StyleSheet.create({
   userName: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
   notifBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   notifDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e', position: 'absolute', top: 8, right: 8, borderWidth: 1.5, borderColor: '#0d5068' },
-  ctaCard: {
-    backgroundColor: '#fff', borderRadius: 18, padding: 18,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 8,
-  },
+  ctaCard: { backgroundColor: '#fff', borderRadius: 18, padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 8 },
   ctaLeft: { flex: 1, marginRight: 12 },
   ctaTitle: { fontSize: 17, fontWeight: '800', color: '#0d5068', letterSpacing: -0.3, marginBottom: 4 },
   ctaSub: { fontSize: 12, color: '#888780', lineHeight: 17 },
@@ -173,38 +167,15 @@ const s = StyleSheet.create({
   sectionRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: '#1a1a18', letterSpacing: -0.3 },
   sectionLink: { fontSize: 13, fontWeight: '600', color: '#0d5068' },
-  specGrid: { 
-  flexDirection: 'row', 
-  flexWrap: 'wrap', 
-  gap: 8,
-},
-specCard: {
-  width: Math.floor((width - 56) / 3),
-  backgroundColor: '#fff', 
-  borderRadius: 14, 
-  padding: 10, 
-  alignItems: 'center',
-  shadowColor: '#000', 
-  shadowOffset: { width: 0, height: 2 }, 
-  shadowOpacity: 0.06, 
-  shadowRadius: 8, 
-  elevation: 2,
-},
-specIconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
-specLabel: { fontSize: 10, fontWeight: '700', color: '#1a1a18', textAlign: 'center', lineHeight: 14 },
-specPrix: { fontSize: 9, color: '#888780', marginTop: 3, fontWeight: '500' },
-  trustBanner: {
-    marginHorizontal: 20, marginTop: 20, backgroundColor: '#fff',
-    borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-around',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
-  },
+  specGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  specCard: { width: Math.floor((width - 56) / 3), backgroundColor: '#fff', borderRadius: 14, padding: 10, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  specIconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  specLabel: { fontSize: 10, fontWeight: '700', color: '#1a1a18', textAlign: 'center', lineHeight: 14 },
+  specPrix: { fontSize: 9, color: '#888780', marginTop: 3, fontWeight: '500' },
+  trustBanner: { marginHorizontal: 20, marginTop: 20, backgroundColor: '#fff', borderRadius: 16, padding: 16, flexDirection: 'row', justifyContent: 'space-around', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   trustItem: { alignItems: 'center', gap: 6 },
   trustLabel: { fontSize: 10, fontWeight: '600', color: '#5f5e5a', textAlign: 'center' },
-  artCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 14, flexDirection: 'row',
-    alignItems: 'center', marginBottom: 10, gap: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2,
-  },
+  artCard: { backgroundColor: '#fff', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', marginBottom: 10, gap: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
   artThumb: { width: 56, height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   artInfo: { flex: 1 },
   artCatWrap: { backgroundColor: '#e0f2fe', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 100, marginBottom: 5 },

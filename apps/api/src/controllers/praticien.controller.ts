@@ -358,13 +358,22 @@ export async function updateInfosPraticien(req: Request, res: Response): Promise
 // GET /api/praticiens/me — praticien connecté
 export async function getMonProfil(req: AuthRequest, res: Response): Promise<void> {
   const praticien = await prisma.praticien.findUnique({
-    where: { userId: req.user!.userId },
-    include: {
-      user: { select: { nom: true, prenom: true, telephone: true } },
-      specialites: true,
-      documents: true,
-    },
+  where: { userId: req.user!.userId },
+  include: {
+    user: { select: { nom: true, prenom: true, telephone: true } },
+    specialites: true,
+    documents: true,
+    missions: { where: { statut: 'TERMINEE' }, select: { id: true } },
+  },
+})
+
+if (praticien) {
+  // Recalculer totalMissions depuis la BD
+  await prisma.praticien.update({
+    where: { id: praticien.id },
+    data: { totalMissions: praticien.missions.length },
   })
+}
   if (!praticien) {
     res.status(404).json({ error: 'Praticien introuvable' })
     return

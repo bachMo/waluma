@@ -11,6 +11,17 @@ import * as Location from 'expo-location'
 import api from '@/lib/api'
 import { connectSocket, emitPosition } from '@/lib/socket'
 
+interface CompteRendu {
+  acteRealise: string
+  description: string
+  recommandations: string | null
+  suiteNecessaire: string | null
+  tension: string | null
+  temperature: number | null
+  pouls: number | null
+  spo2: number | null
+}
+
 interface Mission {
   id: string
   statut: string
@@ -25,6 +36,7 @@ interface Mission {
   notePatient: string | null
   createdAt: string
   patient: { nom: string; prenom: string; telephone: string }
+  compteRendu: CompteRendu | null
 }
 
 const SPEC_LABEL: Record<string, string> = {
@@ -39,6 +51,8 @@ const STATUT_STEPS: { statut: string; label: string; action: string; color: stri
   { statut: 'ARRIVE', label: 'Commencer le soin', action: 'EN_COURS', color: '#0d5068', next: 'Arrivé chez vous' },
   { statut: 'EN_COURS', label: 'Terminer et rédiger le CR', action: 'TERMINEE', color: '#22c55e', next: 'Soin en cours' },
 ]
+
+const STATUTS_TERMINES = ['TERMINEE', 'ANNULEE', 'EXPIREE']
 
 export default function MissionScreen() {
   const { missionId } = useLocalSearchParams<{ missionId: string }>()
@@ -63,18 +77,14 @@ export default function MissionScreen() {
     load()
     const interval = setInterval(load, 15000)
 
-    // Socket et géolocalisation
     async function initSocketAndLocation() {
       try {
         await connectSocket()
-
         const { status } = await Location.requestForegroundPermissionsAsync()
         if (status === 'granted' && missionId) {
           const sub = await Location.watchPositionAsync(
             { accuracy: Location.Accuracy.High, timeInterval: 10000, distanceInterval: 10 },
-            (loc) => {
-              emitPosition(missionId, loc.coords.latitude, loc.coords.longitude)
-            }
+            (loc) => { emitPosition(missionId, loc.coords.latitude, loc.coords.longitude) }
           )
           locationSubRef.current = sub
         }
@@ -93,7 +103,7 @@ export default function MissionScreen() {
 
   async function handleAction(newStatut: string) {
     if (newStatut === 'TERMINEE') {
-      router.push({ pathname: '/(praticien)/compte-rendu', params: { missionId: missionId } })
+      router.push({ pathname: '/(praticien)/compte-rendu', params: { missionId } })
       return
     }
     setActionLoading(true)
@@ -120,13 +130,10 @@ export default function MissionScreen() {
 
   const currentStep = STATUT_STEPS.find(s => s.statut === mission?.statut)
   const stepIndex = STATUT_STEPS.findIndex(s => s.statut === mission?.statut)
+  const estTerminee = mission ? STATUTS_TERMINES.includes(mission.statut) : false
 
   if (loading) {
-    return (
-      <View style={s.center}>
-        <ActivityIndicator color="#0d5068" size="large" />
-      </View>
-    )
+    return <View style={s.center}><ActivityIndicator color="#0d5068" size="large" /></View>
   }
 
   if (!mission) return null
@@ -140,17 +147,31 @@ export default function MissionScreen() {
             <TouchableOpacity onPress={() => router.back()} style={s.backBtn}>
               <Ionicons name="chevron-back" size={22} color="#fff" />
             </TouchableOpacity>
-            <Text style={s.headerTitle}>Mission en cours</Text>
+            <Text style={s.headerTitle}>
+              {estTerminee ? 'Détail de la mission' : 'Mission en cours'}
+            </Text>
             {mission.urgence && (
-              <View style={s.urgentBadge}>
-                <Text style={s.urgentText}>URGENT</Text>
-              </View>
+              <View style={s.urgentBadge}><Text style={s.urgentText}>URGENT</Text></View>
             )}
           </View>
         </SafeAreaView>
       </LinearGradient>
 
       <ScrollView style={s.body} showsVerticalScrollIndicator={false}>
+
+        {/* Statut pour missions terminées */}
+        {estTerminee && (
+          <View style={[s.statutCard, mission.statut === 'ANNULEE' && s.statutCardAnnulee]}>
+            <Ionicons
+              name={mission.statut === 'TERMINEE' ? 'checkmark-circle' : 'close-circle'}
+              size={28}
+              color={mission.statut === 'TERMINEE' ? '#22c55e' : '#dc2626'}
+            />
+            <Text style={[s.statutText, mission.statut === 'ANNULEE' && { color: '#dc2626' }]}>
+              {mission.statut === 'TERMINEE' ? 'Mission terminée' : 'Mission annulée'}
+            </Text>
+          </View>
+        )}
 
         {/* Patient card */}
         <View style={s.patientCard}>
@@ -185,42 +206,88 @@ export default function MissionScreen() {
           </View>
         )}
 
-        {/* Progression */}
-        <View style={s.section}>
-          <Text style={s.sectionTitle}>Progression de la mission</Text>
-          <View style={s.timeline}>
-            {STATUT_STEPS.map((step, i) => {
-              const isDone = i < stepIndex
-              const isActive = i === stepIndex
-              return (
-                <View key={step.statut} style={s.timelineRow}>
-                  <View style={s.timelineLeft}>
-                    <View style={[
-                      s.timelineDot,
-                      isDone && s.timelineDotDone,
-                      isActive && { backgroundColor: step.color, borderColor: step.color },
-                    ]}>
-                      {isDone && <Ionicons name="checkmark" size={12} color="#fff" />}
-                      {isActive && <View style={s.timelineDotInner} />}
+        {/* Progression — seulement pour missions actives */}
+        {!estTerminee && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Progression de la mission</Text>
+            <View style={s.timeline}>
+              {STATUT_STEPS.map((step, i) => {
+                const isDone = i < stepIndex
+                const isActive = i === stepIndex
+                return (
+                  <View key={step.statut} style={s.timelineRow}>
+                    <View style={s.timelineLeft}>
+                      <View style={[
+                        s.timelineDot,
+                        isDone && s.timelineDotDone,
+                        isActive && { backgroundColor: step.color, borderColor: step.color },
+                      ]}>
+                        {isDone && <Ionicons name="checkmark" size={12} color="#fff" />}
+                        {isActive && <View style={s.timelineDotInner} />}
+                      </View>
+                      {i < STATUT_STEPS.length - 1 && (
+                        <View style={[s.timelineLine, isDone && s.timelineLineDone]} />
+                      )}
                     </View>
-                    {i < STATUT_STEPS.length - 1 && (
-                      <View style={[s.timelineLine, isDone && s.timelineLineDone]} />
-                    )}
+                    <View style={s.timelineContent}>
+                      <Text style={[
+                        s.timelineLabel,
+                        isDone && s.timelineLabelDone,
+                        isActive && { color: '#1a1a18', fontWeight: '700' },
+                      ]}>
+                        {step.next}
+                      </Text>
+                    </View>
                   </View>
-                  <View style={s.timelineContent}>
-                    <Text style={[
-                      s.timelineLabel,
-                      isDone && s.timelineLabelDone,
-                      isActive && { color: '#1a1a18', fontWeight: '700' },
-                    ]}>
-                      {step.next}
-                    </Text>
-                  </View>
-                </View>
-              )
-            })}
+                )
+              })}
+            </View>
           </View>
-        </View>
+        )}
+
+        {/* Compte rendu — seulement si mission terminée */}
+        {mission.statut === 'TERMINEE' && mission.compteRendu && (
+          <View style={s.section}>
+            <Text style={s.sectionTitle}>Compte rendu soumis</Text>
+            <View style={s.crCard}>
+              <View style={s.crRow}>
+                <Text style={s.crLabel}>Acte réalisé</Text>
+                <Text style={s.crValue}>{mission.compteRendu.acteRealise}</Text>
+              </View>
+              <View style={s.crRow}>
+                <Text style={s.crLabel}>Description</Text>
+                <Text style={s.crValue}>{mission.compteRendu.description}</Text>
+              </View>
+              {mission.compteRendu.recommandations && (
+                <View style={s.crRow}>
+                  <Text style={s.crLabel}>Recommandations</Text>
+                  <Text style={s.crValue}>{mission.compteRendu.recommandations}</Text>
+                </View>
+              )}
+              {mission.compteRendu.suiteNecessaire && (
+                <View style={[s.crRow, { borderBottomWidth: 0 }]}>
+                  <Text style={s.crLabel}>Suite nécessaire</Text>
+                  <Text style={s.crValue}>{mission.compteRendu.suiteNecessaire}</Text>
+                </View>
+              )}
+              {(mission.compteRendu.tension || mission.compteRendu.temperature || mission.compteRendu.pouls || mission.compteRendu.spo2) && (
+                <View style={s.constantesRow}>
+                  {[
+                    { label: 'Tension', value: mission.compteRendu.tension, unit: 'mmHg' },
+                    { label: 'Temp.', value: mission.compteRendu.temperature, unit: '°C' },
+                    { label: 'Pouls', value: mission.compteRendu.pouls, unit: 'bpm' },
+                    { label: 'SpO₂', value: mission.compteRendu.spo2, unit: '%' },
+                  ].filter(c => c.value).map(c => (
+                    <View key={c.label} style={s.constante}>
+                      <Text style={s.constanteLabel}>{c.label}</Text>
+                      <Text style={s.constanteVal}>{c.value}<Text style={s.constanteUnit}> {c.unit}</Text></Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          </View>
+        )}
 
         {/* Récapitulatif financier */}
         <View style={s.financeCard}>
@@ -250,8 +317,8 @@ export default function MissionScreen() {
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* CTA action */}
-      {currentStep && mission.statut !== 'TERMINEE' && (
+      {/* CTA action — seulement pour missions actives */}
+      {currentStep && !estTerminee && (
         <View style={s.footer}>
           <TouchableOpacity
             style={[s.ctaBtn, { backgroundColor: currentStep.color }, actionLoading && s.ctaBtnDisabled]}
@@ -282,12 +349,11 @@ const s = StyleSheet.create({
   headerTitle: { flex: 1, fontSize: 17, fontWeight: '700', color: '#fff' },
   urgentBadge: { backgroundColor: '#dc2626', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   urgentText: { fontSize: 10, fontWeight: '800', color: '#fff', letterSpacing: 0.5 },
+  statutCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#dcfce7', margin: 16, borderRadius: 14, padding: 14 },
+  statutCardAnnulee: { backgroundColor: '#fee2e2' },
+  statutText: { fontSize: 15, fontWeight: '700', color: '#15803d' },
   body: { flex: 1 },
-  patientCard: {
-    backgroundColor: '#fff', margin: 16, borderRadius: 20, padding: 16,
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4,
-  },
+  patientCard: { backgroundColor: '#fff', margin: 16, borderRadius: 20, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.08, shadowRadius: 12, elevation: 4 },
   patientAvatar: { width: 56, height: 56, borderRadius: 18, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   patientAvatarText: { fontSize: 20, fontWeight: '800', color: '#0d5068' },
   patientInfo: { flex: 1 },
@@ -297,10 +363,7 @@ const s = StyleSheet.create({
   patientActions: { gap: 8 },
   actionBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#e0f2fe', alignItems: 'center', justifyContent: 'center' },
   actionBtnGreen: { backgroundColor: '#dcfce7' },
-  noteCard: {
-    backgroundColor: '#fef3c7', marginHorizontal: 16, marginBottom: 8,
-    borderRadius: 14, padding: 14, borderWidth: 0.5, borderColor: '#fcd34d',
-  },
+  noteCard: { backgroundColor: '#fef3c7', marginHorizontal: 16, marginBottom: 8, borderRadius: 14, padding: 14, borderWidth: 0.5, borderColor: '#fcd34d' },
   noteHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   noteTitle: { fontSize: 12, fontWeight: '700', color: '#0d5068' },
   noteText: { fontSize: 13, color: '#5f5e5a', lineHeight: 19 },
@@ -309,11 +372,7 @@ const s = StyleSheet.create({
   timeline: { backgroundColor: '#fff', borderRadius: 18, padding: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   timelineRow: { flexDirection: 'row', gap: 14 },
   timelineLeft: { alignItems: 'center', width: 28 },
-  timelineDot: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#f1f0eb', borderWidth: 1.5, borderColor: '#e5e4df',
-    alignItems: 'center', justifyContent: 'center',
-  },
+  timelineDot: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#f1f0eb', borderWidth: 1.5, borderColor: '#e5e4df', alignItems: 'center', justifyContent: 'center' },
   timelineDotDone: { backgroundColor: '#22c55e', borderColor: '#22c55e' },
   timelineDotInner: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#fff' },
   timelineLine: { width: 1.5, flex: 1, backgroundColor: '#e5e4df', minHeight: 24, marginVertical: 4 },
@@ -321,10 +380,16 @@ const s = StyleSheet.create({
   timelineContent: { flex: 1, paddingBottom: 24 },
   timelineLabel: { fontSize: 14, color: '#b4b2a9', fontWeight: '500' },
   timelineLabelDone: { color: '#22c55e' },
-  financeCard: {
-    backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18, padding: 18,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
+  crCard: { backgroundColor: '#fff', borderRadius: 18, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
+  crRow: { paddingVertical: 10, borderBottomWidth: 0.5, borderBottomColor: 'rgba(0,0,0,0.06)' },
+  crLabel: { fontSize: 11, fontWeight: '700', color: '#888780', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 },
+  crValue: { fontSize: 14, color: '#1a1a18', lineHeight: 20 },
+  constantesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12 },
+  constante: { flex: 1, minWidth: '45%', backgroundColor: '#f5f4ef', borderRadius: 12, padding: 10 },
+  constanteLabel: { fontSize: 10, fontWeight: '600', color: '#888780', marginBottom: 4 },
+  constanteVal: { fontSize: 16, fontWeight: '800', color: '#1a1a18' },
+  constanteUnit: { fontSize: 11, fontWeight: '400', color: '#888780' },
+  financeCard: { backgroundColor: '#fff', marginHorizontal: 16, borderRadius: 18, padding: 18, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   financeTitle: { fontSize: 14, fontWeight: '700', color: '#1a1a18', marginBottom: 14 },
   financeRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 0.5, borderBottomColor: 'rgba(0,0,0,0.06)' },
   financeLabel: { fontSize: 13, color: '#888780' },
@@ -333,10 +398,7 @@ const s = StyleSheet.create({
   financeTotalLabel: { fontSize: 15, fontWeight: '800', color: '#1a1a18' },
   financeTotalVal: { fontSize: 15, fontWeight: '800', color: '#22c55e' },
   footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: 'rgba(0,0,0,0.06)' },
-  ctaBtn: {
-    borderRadius: 16, padding: 16, flexDirection: 'row',
-    alignItems: 'center', justifyContent: 'center', gap: 8,
-  },
+  ctaBtn: { borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   ctaBtnDisabled: { opacity: 0.6 },
   ctaBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 })

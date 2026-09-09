@@ -49,6 +49,8 @@ export default function RootLayout() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="(praticien)" />
       <Stack.Screen name="+not-found" />
+      <Stack.Screen name="compte" />
+<Stack.Screen name="praticien-compte" />
     </Stack>
   )
 }

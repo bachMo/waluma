@@ -1,12 +1,13 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
-  StyleSheet, SafeAreaView, Alert, StatusBar, Platform
+  StyleSheet, Alert, StatusBar, Platform, ActivityIndicator, Image
 } from 'react-native'
 import { router } from 'expo-router'
 import { useState, useEffect } from 'react'
 import { getUser, clearAuth, User } from '@/lib/auth'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
+import * as ImagePicker from 'expo-image-picker'
 import api from '@/lib/api'
 
 interface PraticienData {
@@ -27,14 +28,25 @@ const SPEC_LABEL: Record<string, string> = {
 export default function PraticienProfilScreen() {
   const [user, setUser] = useState<User | null>(null)
   const [praticien, setPraticien] = useState<PraticienData | null>(null)
+  const [totalMissions, setTotalMissions] = useState(0)
+  const [uploadingPhoto, setUploadingPhoto] = useState(false)
+  const [photoUri, setPhotoUri] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const u = await getUser()
       setUser(u)
       try {
-        const { data } = await api.get('/praticiens/me')
-        setPraticien(data)
+        const [praticienRes, missionsRes] = await Promise.all([
+          api.get('/praticiens/me'),
+          api.get('/missions?limit=100'),
+        ])
+        setPraticien(praticienRes.data)
+        // Compter toutes les missions terminées du praticien
+        const terminées = missionsRes.data.missions.filter(
+          (m: { statut: string }) => m.statut === 'TERMINEE'
+        ).length
+        setTotalMissions(terminées)
       } catch {}
     }
     load()
@@ -43,39 +55,63 @@ export default function PraticienProfilScreen() {
   async function handleLogout() {
     Alert.alert('Déconnexion', 'Voulez-vous vraiment vous déconnecter ?', [
       { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Déconnexion', style: 'destructive',
-        onPress: async () => { await clearAuth(); router.replace('/(auth)') },
-      },
+      { text: 'Déconnexion', style: 'destructive', onPress: async () => { await clearAuth(); router.replace('/(auth)') } },
     ])
   }
 
-  const sections = [
-    {
-      title: 'Mon activité',
-      items: [
-        { icon: 'clipboard-outline', label: 'Mes missions', sub: `${praticien?.totalMissions ?? 0} au total`, onPress: () => {} },
-        { icon: 'wallet-outline', label: 'Mes gains', onPress: () => router.push('/(praticien)/gains') },
-        { icon: 'star-outline', label: 'Mes avis', sub: praticien?.noteMoyenne ? `${praticien.noteMoyenne.toFixed(1)} / 5` : 'Aucun avis', onPress: () => {} },
-      ],
-    },
-    {
-      title: 'Mon profil professionnel',
-      items: [
-        { icon: 'document-text-outline', label: 'Mes documents', sub: `${praticien?.documents.length ?? 0} document(s)`, onPress: () => {} },
-        { icon: 'location-outline', label: 'Zone d\'intervention', onPress: () => {} },
-        { icon: 'medical-outline', label: 'Mes spécialités', onPress: () => {} },
-      ],
-    },
-    {
-      title: 'Compte',
-      items: [
-        { icon: 'notifications-outline', label: 'Notifications', onPress: () => {} },
-        { icon: 'shield-checkmark-outline', label: 'Politique de confidentialité', onPress: () => {} },
-        { icon: 'help-circle-outline', label: 'Aide et support', onPress: () => {} },
-      ],
-    },
-  ]
+  async function handleChangePhoto() {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+    if (status !== 'granted') {
+      Alert.alert('Permission refusée', 'Autorisez l\'accès à vos photos dans les réglages')
+      return
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    })
+    if (result.canceled) return
+    setUploadingPhoto(true)
+    try {
+      setPhotoUri(result.assets[0].uri)
+    } catch {
+      Alert.alert('Erreur', 'Impossible de changer la photo')
+    } finally {
+      setUploadingPhoto(false)
+    }
+  }
+
+  function bientotDisponible() {
+    Alert.alert('Bientôt disponible', 'Cette fonctionnalité sera disponible dans une prochaine version.')
+  }
+
+const sections = [
+  {
+    title: 'Mon activité',
+    items: [
+      { icon: 'clipboard-outline', label: 'Mes missions', sub: `${totalMissions} mission(s) terminée(s)`, onPress: () => router.push('/praticien-compte/missions' as never) },
+      { icon: 'wallet-outline', label: 'Mes gains', onPress: () => router.push('/(praticien)/gains') },
+      { icon: 'star-outline', label: 'Mes avis', sub: praticien?.noteMoyenne ? `${praticien.noteMoyenne.toFixed(1)} / 5` : 'Aucun avis', onPress: () => router.push('/praticien-compte/avis' as never) },
+    ],
+  },
+  {
+    title: 'Mon profil professionnel',
+    items: [
+      { icon: 'document-text-outline', label: 'Mes documents', sub: `${praticien?.documents.length ?? 0} document(s)`, onPress: () => router.push('/praticien-compte/documents' as never) },
+      { icon: 'location-outline', label: 'Zone d\'intervention', onPress: () => router.push('/praticien-compte/zone' as never) },
+      { icon: 'medical-outline', label: 'Mes spécialités', onPress: () => router.push('/praticien-compte/specialites' as never) },
+    ],
+  },
+  {
+    title: 'Compte',
+    items: [
+{ icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/praticien-compte/notifications' as never) },
+{ icon: 'shield-checkmark-outline', label: 'Politique de confidentialité', onPress: () => router.push({ pathname: '/praticien-compte/legal', params: { type: 'politique' } } as never) },
+{ icon: 'help-circle-outline', label: 'Aide et support', onPress: () => router.push({ pathname: '/praticien-compte/legal', params: { type: 'aide' } } as never) },
+    ],
+  },
+]
 
   const statutConfig = {
     VALIDE: { label: 'Compte validé', color: '#22c55e', bg: '#dcfce7' },
@@ -91,38 +127,46 @@ export default function PraticienProfilScreen() {
     <View style={s.root}>
       <StatusBar barStyle="light-content" />
       <LinearGradient colors={['#0d5068', '#083d50']} style={s.headerGrad}>
-        <SafeAreaView>
-          <View style={s.header}>
-            <LinearGradient colors={['#22c55e', '#16a34a']} style={s.avatar}>
-              <Text style={s.avatarText}>
-                {(user?.prenom?.[0] ?? '') + (user?.nom?.[0] ?? '')}
-              </Text>
-            </LinearGradient>
-            <Text style={s.name}>{user?.prenom} {user?.nom}</Text>
-            {praticien && (
-              <Text style={s.spec}>
-                {SPEC_LABEL[praticien.specialites.find(s => s.principale)?.specialite ?? ''] ?? ''}
-              </Text>
+        <View style={[s.header, { paddingTop: Platform.OS === 'android' ? 40 : 60 }]}>
+          <TouchableOpacity style={s.avatarWrap} onPress={handleChangePhoto} disabled={uploadingPhoto}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={s.avatar} />
+            ) : (
+              <LinearGradient colors={['#22c55e', '#16a34a']} style={s.avatar}>
+                <Text style={s.avatarText}>{(user?.prenom?.[0] ?? '') + (user?.nom?.[0] ?? '')}</Text>
+              </LinearGradient>
             )}
-            <View style={[s.statutBadge, { backgroundColor: sc.bg }]}>
-              <View style={[s.statutDot, { backgroundColor: sc.color }]} />
-              <Text style={[s.statutText, { color: sc.color }]}>{sc.label}</Text>
+            <View style={s.editAvatar}>
+              {uploadingPhoto
+                ? <ActivityIndicator size="small" color="#fff" />
+                : <Ionicons name="camera" size={14} color="#fff" />
+              }
             </View>
-
-            <View style={s.statsRow}>
-              {[
-                { label: 'Missions', value: (praticien?.totalMissions ?? 0).toString() },
-                { label: 'Note', value: praticien?.noteMoyenne ? `${praticien.noteMoyenne.toFixed(1)} ★` : '—' },
-                { label: 'Documents', value: (praticien?.documents.length ?? 0).toString() },
-              ].map((stat, i) => (
-                <View key={stat.label} style={[s.statItem, i < 2 && s.statBorder]}>
-                  <Text style={s.statValue}>{stat.value}</Text>
-                  <Text style={s.statLabel}>{stat.label}</Text>
-                </View>
-              ))}
-            </View>
+          </TouchableOpacity>
+          <Text style={s.name}>{user?.prenom} {user?.nom}</Text>
+          {praticien && (
+            <Text style={s.spec}>
+              {SPEC_LABEL[praticien.specialites.find(s => s.principale)?.specialite ?? ''] ?? ''}
+            </Text>
+          )}
+          <View style={[s.statutBadge, { backgroundColor: sc.bg }]}>
+            <View style={[s.statutDot, { backgroundColor: sc.color }]} />
+            <Text style={[s.statutText, { color: sc.color }]}>{sc.label}</Text>
           </View>
-        </SafeAreaView>
+
+          <View style={s.statsRow}>
+            {[
+              { label: 'Missions', value: totalMissions.toString() },
+              { label: 'Note', value: praticien?.noteMoyenne ? `${praticien.noteMoyenne.toFixed(1)} ★` : '—' },
+              { label: 'Documents', value: (praticien?.documents.length ?? 0).toString() },
+            ].map((stat, i) => (
+              <View key={stat.label} style={[s.statItem, i < 2 && s.statBorder]}>
+                <Text style={s.statValue}>{stat.value}</Text>
+                <Text style={s.statLabel}>{stat.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
       </LinearGradient>
 
       <ScrollView style={s.body} showsVerticalScrollIndicator={false}>
@@ -157,7 +201,6 @@ export default function PraticienProfilScreen() {
             <Text style={s.logoutText}>Déconnexion</Text>
           </TouchableOpacity>
         </View>
-
         <Text style={s.version}>Waluma Praticien v1.0.0</Text>
         <View style={{ height: 32 }} />
       </ScrollView>
@@ -168,9 +211,11 @@ export default function PraticienProfilScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f5f4ef' },
   headerGrad: {},
-  header: { paddingHorizontal: 20, paddingTop: Platform.OS === 'android' ? 20 : 0, paddingBottom: 20, alignItems: 'center' },
-  avatar: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  header: { paddingHorizontal: 20, paddingBottom: 20, alignItems: 'center' },
+  avatarWrap: { position: 'relative', marginBottom: 12 },
+  avatar: { width: 80, height: 80, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   avatarText: { fontSize: 28, fontWeight: '800', color: '#fff' },
+  editAvatar: { position: 'absolute', bottom: -4, right: -4, width: 26, height: 26, borderRadius: 8, backgroundColor: '#0d5068', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#fff' },
   name: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5, marginBottom: 3 },
   spec: { fontSize: 13, color: 'rgba(255,255,255,0.5)', marginBottom: 12 },
   statutBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 100, marginBottom: 20 },

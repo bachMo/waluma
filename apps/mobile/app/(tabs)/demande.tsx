@@ -5,6 +5,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router'
 import { useState } from 'react'
 import api from '@/lib/api'
+import { useEffect } from 'react'
 
 const SPECIALITES = [
   { key: 'INFIRMIER', label: 'Soins infirmiers', prix: 8000, emoji: '💉' },
@@ -22,6 +23,12 @@ export default function DemandeScreen() {
   const [note, setNote] = useState('')
   const [urgence, setUrgence] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+  if (params.specialite) {
+    setSpecialite(params.specialite as string)
+  }
+}, [params.specialite])
 
   const selected = SPECIALITES.find(s => s.key === specialite)
   const montantTotal = selected ? selected.prix + 2500 : 0

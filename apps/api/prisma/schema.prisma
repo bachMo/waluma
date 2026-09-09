@@ -134,6 +134,8 @@ model User {
   // Notifications
   notifications Notification[]
 
+  demandes     Demande[]
+
   pushTokens  PushToken[]
 
   @@map("users")
@@ -481,4 +483,20 @@ model MoyenPaiement {
   createdAt   DateTime             @default(now())
 
   @@map("moyens_paiement")
+}
+
+model Demande {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type         String   // SPECIALITE, ZONE, AUTRE
+  description  String
+  details      String   @default("")
+  statut       String   @default("EN_ATTENTE")
+  reponseAdmin String?
+  traiteeAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("demandes")
 }

@@ -63,6 +63,9 @@ export default function TabLayout() {
       <Tabs.Screen name="articles/[id]" options={{ href: null }} />
       <Tabs.Screen name="paiement" options={{ href: null }} />
 <Tabs.Screen name="confirmation-paiement" options={{ href: null }} />
+<Tabs.Screen name="litige" options={{ href: null }} />
+<Tabs.Screen name="compte" options={{ href: null }} />
+
     </Tabs>
   )
 }
