@@ -4,36 +4,44 @@ import {
   RefreshControl, StatusBar
 } from 'react-native'
 import { router } from 'expo-router'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useCallback } from 'react'
+import { useFocusEffect } from 'expo-router'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import api from '@/lib/api'
 
 interface Mission {
   id: string
-  reference: string
   statut: string
   specialite: string
   adresseTexte: string
   montantTotal: number
   createdAt: string
+  paiement: { statut: string } | null
   praticien: { user: { nom: string; prenom: string } } | null
 }
 
 const STATUT_CONFIG: Record<string, { label: string; color: string; bg: string; icon: string }> = {
-  TERMINEE:   { label: 'Terminé',      color: '#15803d', bg: '#dcfce7', icon: 'checkmark-circle' },
-  EN_COURS:   { label: 'Soin en cours', color: '#1d4ed8', bg: '#dbeafe', icon: 'medkit' },
-  EN_ROUTE:   { label: 'En route',      color: '#7c3aed', bg: '#ede9fe', icon: 'car' },
-  ACCEPTEE:   { label: 'Acceptée',      color: '#0d5068', bg: '#e0f2fe', icon: 'person' },
-  EN_ATTENTE: { label: 'En attente',    color: '#d97706', bg: '#fef3c7', icon: 'time' },
-  ANNULEE:    { label: 'Annulée',       color: '#dc2626', bg: '#fee2e2', icon: 'close-circle' },
-  EXPIREE:    { label: 'Expirée',       color: '#6b7280', bg: '#f3f4f6', icon: 'alert-circle' },
+  TERMINEE:          { label: 'Terminé',                  color: '#15803d', bg: '#dcfce7', icon: 'checkmark-circle' },
+  TERMINEE_IMPAYEE:  { label: 'Paiement en attente',      color: '#d97706', bg: '#fef3c7', icon: 'card' },
+  EN_COURS:          { label: 'Soin en cours',             color: '#1d4ed8', bg: '#dbeafe', icon: 'medkit' },
+  EN_ROUTE:          { label: 'En route',                  color: '#7c3aed', bg: '#ede9fe', icon: 'car' },
+  ARRIVE:            { label: 'Arrivé',                    color: '#0891b2', bg: '#cffafe', icon: 'location' },
+  ACCEPTEE:          { label: 'Acceptée',                  color: '#0d5068', bg: '#e0f2fe', icon: 'person' },
+  EN_ATTENTE:        { label: 'En attente',                color: '#d97706', bg: '#fef3c7', icon: 'time' },
+  ANNULEE:           { label: 'Annulée',                   color: '#dc2626', bg: '#fee2e2', icon: 'close-circle' },
+  EXPIREE:           { label: 'Expirée',                   color: '#6b7280', bg: '#f3f4f6', icon: 'alert-circle' },
 }
 
 const SPEC_LABEL: Record<string, string> = {
   INFIRMIER: 'Soins infirmiers', MEDECIN_GENERALISTE: 'Médecin généraliste',
   SAGE_FEMME: 'Sage-femme', KINESITHERAPEUTE: 'Kinésithérapie',
   PRELEVEUR: 'Prélèvement', PEDIATRE: 'Pédiatre', AUTRE: 'Autre',
+}
+
+function getStatutKey(m: Mission): string {
+  if (m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE') return 'TERMINEE_IMPAYEE'
+  return m.statut
 }
 
 export default function HistoriqueScreen() {
@@ -51,11 +59,19 @@ export default function HistoriqueScreen() {
     }
   }
 
-  useEffect(() => { load() }, [])
-  const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
+useFocusEffect(useCallback(() => { load() }, []))
+const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
 
-  const actives = missions.filter(m => !['TERMINEE', 'ANNULEE', 'EXPIREE'].includes(m.statut))
-  const passees = missions.filter(m => ['TERMINEE', 'ANNULEE', 'EXPIREE'].includes(m.statut))
+  // Une mission TERMINEE non payée reste dans "En cours" côté patient
+  const actives = missions.filter(m =>
+    !['ANNULEE', 'EXPIREE'].includes(m.statut) &&
+    !(m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE')
+  )
+  const passees = missions.filter(m =>
+    m.statut === 'ANNULEE' ||
+    m.statut === 'EXPIREE' ||
+    (m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE')
+  )
 
   return (
     <View style={s.root}>
@@ -80,10 +96,7 @@ export default function HistoriqueScreen() {
           </LinearGradient>
           <Text style={s.emptyTitle}>Aucun soin pour l'instant</Text>
           <Text style={s.emptySub}>Vos demandes de soin apparaîtront ici</Text>
-          <TouchableOpacity
-            style={s.emptyBtn}
-            onPress={() => router.push('/(tabs)/demande')}
-          >
+          <TouchableOpacity style={s.emptyBtn} onPress={() => router.push('/(tabs)/demande')}>
             <Ionicons name="add" size={18} color="#fff" />
             <Text style={s.emptyBtnText}>Demander un soin</Text>
           </TouchableOpacity>
@@ -94,23 +107,17 @@ export default function HistoriqueScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d5068" />}
         >
-          {/* Missions actives */}
           {actives.length > 0 && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>En cours</Text>
-              {actives.map(m => (
-                <MissionCard key={m.id} mission={m} active />
-              ))}
+              {actives.map(m => <MissionCard key={m.id} mission={m} active />)}
             </View>
           )}
 
-          {/* Historique */}
           {passees.length > 0 && (
             <View style={s.section}>
               <Text style={s.sectionTitle}>Historique</Text>
-              {passees.map(m => (
-                <MissionCard key={m.id} mission={m} />
-              ))}
+              {passees.map(m => <MissionCard key={m.id} mission={m} />)}
             </View>
           )}
 
@@ -122,11 +129,13 @@ export default function HistoriqueScreen() {
 }
 
 function MissionCard({ mission: m, active }: { mission: Mission; active?: boolean }) {
-  const config = STATUT_CONFIG[m.statut] ?? STATUT_CONFIG.EN_ATTENTE
+  const statutKey = getStatutKey(m)
+  const config = STATUT_CONFIG[statutKey] ?? STATUT_CONFIG.EN_ATTENTE
+  const isPaiementAttente = statutKey === 'TERMINEE_IMPAYEE'
 
   return (
     <TouchableOpacity
-      style={[s.card, active && s.cardActive]}
+      style={[s.card, active && s.cardActive, isPaiementAttente && s.cardPaiementAttente]}
       onPress={() => router.push({ pathname: '/(tabs)/suivi', params: { missionId: m.id } })}
       activeOpacity={0.85}
     >
@@ -147,6 +156,14 @@ function MissionCard({ mission: m, active }: { mission: Mission; active?: boolea
           <Text style={[s.statusText, { color: config.color }]}>{config.label}</Text>
         </View>
         <Text style={s.cardMontant}>{m.montantTotal.toLocaleString()} F</Text>
+        {isPaiementAttente && (
+          <TouchableOpacity
+            style={s.payNowBtn}
+            onPress={() => router.push({ pathname: '/(tabs)/paiement', params: { missionId: m.id } })}
+          >
+            <Text style={s.payNowText}>Payer</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </TouchableOpacity>
   )
@@ -163,20 +180,14 @@ const s = StyleSheet.create({
   emptyIcon: { width: 88, height: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   emptyTitle: { fontSize: 18, fontWeight: '800', color: '#1a1a18', marginBottom: 8 },
   emptySub: { fontSize: 13, color: '#888780', textAlign: 'center', marginBottom: 24 },
-  emptyBtn: {
-    backgroundColor: '#22c55e', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13,
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-  },
+  emptyBtn: { backgroundColor: '#22c55e', borderRadius: 14, paddingHorizontal: 24, paddingVertical: 13, flexDirection: 'row', alignItems: 'center', gap: 8 },
   emptyBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   body: { flex: 1 },
   section: { paddingHorizontal: 20, marginTop: 20 },
   sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: '#888780', marginBottom: 12 },
-  card: {
-    backgroundColor: '#fff', borderRadius: 18, padding: 16, flexDirection: 'row',
-    alignItems: 'center', gap: 14, marginBottom: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
+  card: { backgroundColor: '#fff', borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   cardActive: { borderWidth: 1.5, borderColor: '#22c55e' },
+  cardPaiementAttente: { borderWidth: 1.5, borderColor: '#f59e0b' },
   cardIcon: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   cardInfo: { flex: 1 },
   cardSpec: { fontSize: 14, fontWeight: '700', color: '#1a1a18', marginBottom: 3 },
@@ -186,4 +197,6 @@ const s = StyleSheet.create({
   statusBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   statusText: { fontSize: 10, fontWeight: '700' },
   cardMontant: { fontSize: 13, fontWeight: '700', color: '#1a1a18' },
+  payNowBtn: { backgroundColor: '#22c55e', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  payNowText: { fontSize: 10, fontWeight: '800', color: '#fff' },
 })

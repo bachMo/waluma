@@ -78,6 +78,7 @@ export async function verifyOtpHandler(req: Request, res: Response): Promise<voi
       prenom: user.prenom,
       role: user.role,
       telephone: user.telephone,
+      avatarUrl: user.avatarUrl ?? null,
     },
     premiereConnexion,
   });

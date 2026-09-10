@@ -37,6 +37,7 @@ interface Mission {
   createdAt: string
   patient: { nom: string; prenom: string; telephone: string }
   compteRendu: CompteRendu | null
+  paiement: { statut: string; montant: number } | null
 }
 
 const SPEC_LABEL: Record<string, string> = {
@@ -117,6 +118,31 @@ export default function MissionScreen() {
     }
   }
 
+  async function handleAnnuler() {
+    Alert.alert(
+      'Annuler la mission',
+      'Voulez-vous vraiment annuler cette mission ? Le patient sera notifié.',
+      [
+        { text: 'Non', style: 'cancel' },
+        {
+          text: 'Oui, annuler',
+          style: 'destructive',
+          onPress: async () => {
+            setActionLoading(true)
+            try {
+              await api.patch(`/missions/${missionId}/statut`, { statut: 'ANNULEE' })
+              router.replace('/(praticien)' as never)
+            } catch {
+              Alert.alert('Erreur', 'Impossible d\'annuler la mission')
+            } finally {
+              setActionLoading(false)
+            }
+          },
+        },
+      ]
+    )
+  }
+
   function openMaps() {
     if (!mission) return
     const addr = encodeURIComponent(mission.adresseTexte + ', Dakar, Sénégal')
@@ -131,6 +157,7 @@ export default function MissionScreen() {
   const currentStep = STATUT_STEPS.find(s => s.statut === mission?.statut)
   const stepIndex = STATUT_STEPS.findIndex(s => s.statut === mission?.statut)
   const estTerminee = mission ? STATUTS_TERMINES.includes(mission.statut) : false
+  const paiementRecu = mission?.paiement?.statut === 'PAYE'
 
   if (loading) {
     return <View style={s.center}><ActivityIndicator color="#0d5068" size="large" /></View>
@@ -159,7 +186,7 @@ export default function MissionScreen() {
 
       <ScrollView style={s.body} showsVerticalScrollIndicator={false}>
 
-        {/* Statut pour missions terminées */}
+        {/* Statut pour missions terminées/annulées */}
         {estTerminee && (
           <View style={[s.statutCard, mission.statut === 'ANNULEE' && s.statutCardAnnulee]}>
             <Ionicons
@@ -206,7 +233,7 @@ export default function MissionScreen() {
           </View>
         )}
 
-        {/* Progression — seulement pour missions actives */}
+        {/* Progression — missions actives uniquement */}
         {!estTerminee && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>Progression de la mission</Text>
@@ -245,7 +272,7 @@ export default function MissionScreen() {
           </View>
         )}
 
-        {/* Compte rendu — seulement si mission terminée */}
+        {/* Compte rendu — mission terminée */}
         {mission.statut === 'TERMINEE' && mission.compteRendu && (
           <View style={s.section}>
             <Text style={s.sectionTitle}>Compte rendu soumis</Text>
@@ -312,28 +339,52 @@ export default function MissionScreen() {
               {Math.round(mission.montantTotal * 0.9).toLocaleString()} FCFA
             </Text>
           </View>
+          {/* Statut paiement */}
+          <View style={[s.paiementBadge, paiementRecu ? s.paiementPaye : s.paiementAttente]}>
+            <Ionicons
+              name={paiementRecu ? 'checkmark-circle' : 'time-outline'}
+              size={16}
+              color={paiementRecu ? '#15803d' : '#d97706'}
+            />
+            <Text style={[s.paiementText, { color: paiementRecu ? '#15803d' : '#d97706' }]}>
+              {paiementRecu ? 'Paiement reçu — gain sécurisé' : 'En attente de paiement du patient'}
+            </Text>
+          </View>
         </View>
 
         <View style={{ height: 24 }} />
       </ScrollView>
 
-      {/* CTA action — seulement pour missions actives */}
-      {currentStep && !estTerminee && (
+      {/* Footer actions — missions actives */}
+      {!estTerminee && (
         <View style={s.footer}>
-          <TouchableOpacity
-            style={[s.ctaBtn, { backgroundColor: currentStep.color }, actionLoading && s.ctaBtnDisabled]}
-            onPress={() => handleAction(currentStep.action)}
-            disabled={actionLoading}
-            activeOpacity={0.88}
-          >
-            {actionLoading
-              ? <ActivityIndicator color="#fff" />
-              : <>
-                <Text style={s.ctaBtnText}>{currentStep.label}</Text>
-                <Ionicons name="arrow-forward" size={18} color="#fff" />
-              </>
-            }
-          </TouchableOpacity>
+          {currentStep && (
+            <TouchableOpacity
+              style={[s.ctaBtn, { backgroundColor: currentStep.color }, actionLoading && s.ctaBtnDisabled]}
+              onPress={() => handleAction(currentStep.action)}
+              disabled={actionLoading}
+              activeOpacity={0.88}
+            >
+              {actionLoading
+                ? <ActivityIndicator color="#fff" />
+                : <>
+                  <Text style={s.ctaBtnText}>{currentStep.label}</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#fff" />
+                </>
+              }
+            </TouchableOpacity>
+          )}
+          {['ACCEPTEE', 'EN_ROUTE'].includes(mission.statut) && (
+            <TouchableOpacity
+              style={s.cancelBtn}
+              onPress={handleAnnuler}
+              disabled={actionLoading}
+              activeOpacity={0.88}
+            >
+              <Ionicons name="close-circle-outline" size={18} color="#dc2626" />
+              <Text style={s.cancelBtnText}>Annuler la mission</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
     </View>
@@ -397,8 +448,14 @@ const s = StyleSheet.create({
   financeTotalRow: { borderBottomWidth: 0, paddingTop: 12, marginTop: 4 },
   financeTotalLabel: { fontSize: 15, fontWeight: '800', color: '#1a1a18' },
   financeTotalVal: { fontSize: 15, fontWeight: '800', color: '#22c55e' },
-  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: 'rgba(0,0,0,0.06)' },
+  paiementBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, padding: 10, borderRadius: 12 },
+  paiementPaye: { backgroundColor: '#dcfce7' },
+  paiementAttente: { backgroundColor: '#fef3c7' },
+  paiementText: { fontSize: 13, fontWeight: '700' },
+  footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: 'rgba(0,0,0,0.06)', gap: 10 },
   ctaBtn: { borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   ctaBtnDisabled: { opacity: 0.6 },
   ctaBtnText: { fontSize: 16, fontWeight: '700', color: '#fff' },
+  cancelBtn: { borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#fee2e2', borderWidth: 1, borderColor: '#fca5a5' },
+  cancelBtnText: { fontSize: 14, fontWeight: '700', color: '#dc2626' },
 })

@@ -80,23 +80,28 @@ export default function SuiviScreen() {
     }
   }, [missionId])
 
-  async function handleAnnuler() {
-    Alert.alert(
-      'Annuler la mission',
-      'Voulez-vous vraiment annuler cette demande de soin ?',
-      [
-        { text: 'Non', style: 'cancel' },
-        {
-          text: 'Oui, annuler',
-          style: 'destructive',
-          onPress: async () => {
+async function handleAnnuler() {
+  Alert.alert(
+    'Annuler la mission',
+    'Voulez-vous vraiment annuler cette demande de soin ?',
+    [
+      { text: 'Non', style: 'cancel' },
+      {
+        text: 'Oui, annuler',
+        style: 'destructive',
+        onPress: async () => {
+          try {
             await api.patch(`/missions/${missionId}/statut`, { statut: 'ANNULEE' })
             router.replace('/(tabs)' as never)
-          },
+          } catch (e: unknown) {
+            const err = e as { response?: { data?: { error?: string }; status?: number } }
+            Alert.alert('Erreur', `${err?.response?.status} - ${err?.response?.data?.error || 'Erreur inconnue'}`)
+          }
         },
-      ]
-    )
-  }
+      },
+    ]
+  )
+}
 
   const currentIndex = mission ? STATUT_ORDER.indexOf(mission.statut) : 0
   const dejaPayee = mission?.paiement?.statut === 'PAYE'

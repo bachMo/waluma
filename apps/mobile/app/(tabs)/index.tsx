@@ -3,7 +3,8 @@ import {
   StyleSheet, SafeAreaView, StatusBar, Dimensions, Image, Alert
 } from 'react-native'
 import { router } from 'expo-router'
-import { useEffect, useState } from 'react'
+import { useState, useCallback } from 'react'
+import { useFocusEffect } from 'expo-router'
 import { getUser } from '@/lib/auth'
 import api from '@/lib/api'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
@@ -20,24 +21,58 @@ const SPECIALITES = [
   { key: 'PEDIATRE', label: 'Pédiatre', prix: '15 000', icon: 'emoticon-happy-outline', color: '#16a34a', bg: '#dcfce7' },
 ]
 
+const SPECIALITE_LABEL: Record<string, string> = {
+  INFIRMIER: 'Soins infirmiers', MEDECIN_GENERALISTE: 'Médecin généraliste',
+  SAGE_FEMME: 'Sage-femme', KINESITHERAPEUTE: 'Kinésithérapie',
+  PRELEVEUR: 'Prélèvement', PEDIATRE: 'Pédiatre', AUTRE: 'Autre',
+}
+
+const STATUT_LABEL: Record<string, { label: string; color: string }> = {
+  EN_ATTENTE: { label: 'Recherche d\'un praticien...', color: '#d97706' },
+  ACCEPTEE: { label: 'Praticien assigné', color: '#0d5068' },
+  EN_ROUTE: { label: 'Praticien en route', color: '#7c3aed' },
+  ARRIVE: { label: 'Praticien arrivé', color: '#0891b2' },
+  EN_COURS: { label: 'Soin en cours', color: '#22c55e' },
+  TERMINEE: { label: 'Soin terminé — paiement en attente', color: '#d97706' },
+}
+
 interface Article { id: string; titre: string; categorie: string; auteur: string; imageUrl: string | null }
+interface MissionActive {
+  id: string
+  statut: string
+  specialite: string
+  adresseTexte: string
+  paiement: { statut: string } | null
+  praticien: { user: { prenom: string; nom: string } } | null
+}
 
 export default function HomeScreen() {
   const [userName, setUserName] = useState('')
   const [articles, setArticles] = useState<Article[]>([])
+  const [missionActive, setMissionActive] = useState<MissionActive | null>(null)
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     async function load() {
       const user = await getUser()
       if (user) setUserName(user.prenom)
-      else router.replace('/(auth)')
+      else { router.replace('/(auth)'); return }
+
       try {
         const { data } = await api.get('/articles?limit=2&statut=publié')
         setArticles(data.articles)
       } catch {}
+
+      try {
+        const { data } = await api.get('/missions?limit=10')
+        const active = data.missions.find((m: { statut: string; paiement?: { statut: string } | null }) =>
+  ['EN_ATTENTE', 'ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'].includes(m.statut) ||
+  (m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE')
+)
+        setMissionActive(active ?? null)
+      } catch {}
     }
     load()
-  }, [])
+  }, []))
 
   const hour = new Date().getHours()
   const greeting = hour < 12 ? 'Bonjour' : hour < 18 ? 'Bon après-midi' : 'Bonsoir'
@@ -52,20 +87,52 @@ export default function HomeScreen() {
               <Text style={s.greeting}>{greeting} 👋</Text>
               <Text style={s.userName}>{userName || '...'}</Text>
             </View>
-            <TouchableOpacity style={s.notifBtn} onPress={() => Alert.alert('Notifications', 'Aucune nouvelle notification pour l\'instant.')}>
+            <TouchableOpacity
+              style={s.notifBtn}
+              onPress={() => Alert.alert('Notifications', 'Aucune nouvelle notification pour l\'instant.')}
+            >
               <Ionicons name="notifications-outline" size={22} color="rgba(255,255,255,0.8)" />
               <View style={s.notifDot} />
             </TouchableOpacity>
           </View>
-          <TouchableOpacity style={s.ctaCard} onPress={() => router.push('/(tabs)/demande')} activeOpacity={0.92}>
-            <View style={s.ctaLeft}>
-              <Text style={s.ctaTitle}>Demander un soin</Text>
-              <Text style={s.ctaSub}>Un professionnel chez vous en moins de 30 min</Text>
-            </View>
-            <View style={s.ctaIconWrap}>
-              <Ionicons name="add" size={28} color="#0d5068" />
-            </View>
-          </TouchableOpacity>
+
+          {/* Mission active ou CTA demande */}
+          {missionActive ? (
+            <TouchableOpacity
+              style={s.missionActiveCard}
+              onPress={() => router.push({ pathname: '/(tabs)/suivi', params: { missionId: missionActive.id } })}
+              activeOpacity={0.88}
+            >
+              <View style={s.missionActivePulse}>
+                <View style={s.missionActiveDot} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.missionActiveTitle}>
+                  {missionActive.statut === 'TERMINEE' && missionActive.paiement?.statut !== 'PAYE'
+  ? 'Soin terminé — paiement en attente'
+  : STATUT_LABEL[missionActive.statut]?.label ?? 'Mission en cours'
+}
+                </Text>
+                <Text style={s.missionActiveSub}>
+                  {SPECIALITE_LABEL[missionActive.specialite]}
+                  {missionActive.praticien
+                    ? ` · ${missionActive.praticien.user.prenom} ${missionActive.praticien.user.nom}`
+                    : ''}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={s.ctaCard} onPress={() => router.push('/(tabs)/demande')} activeOpacity={0.92}>
+              <View style={s.ctaLeft}>
+                <Text style={s.ctaTitle}>Demander un soin</Text>
+                <Text style={s.ctaSub}>Un professionnel chez vous en moins de 30 min</Text>
+              </View>
+              <View style={s.ctaIconWrap}>
+                <Ionicons name="add" size={28} color="#0d5068" />
+              </View>
+            </TouchableOpacity>
+          )}
         </LinearGradient>
       </SafeAreaView>
 
@@ -73,7 +140,6 @@ export default function HomeScreen() {
         <View style={s.section}>
           <View style={s.sectionRow}>
             <Text style={s.sectionTitle}>Soins disponibles</Text>
-            
           </View>
           <View style={s.specGrid}>
             {SPECIALITES.map(sp => (
@@ -122,12 +188,12 @@ export default function HomeScreen() {
                 onPress={() => router.push({ pathname: '/(tabs)/articles/[id]', params: { id: art.id } } as never)}
               >
                 {art.imageUrl ? (
-  <Image source={{ uri: art.imageUrl }} style={s.artThumb} resizeMode="cover" />
-) : (
-  <LinearGradient colors={['#0d5068', '#0a3f52']} style={s.artThumb}>
-    <Ionicons name="newspaper-outline" size={22} color="rgba(255,255,255,0.7)" />
-  </LinearGradient>
-)}
+                  <Image source={{ uri: art.imageUrl }} style={s.artThumb} resizeMode="cover" />
+                ) : (
+                  <LinearGradient colors={['#0d5068', '#0a3f52']} style={s.artThumb}>
+                    <Ionicons name="newspaper-outline" size={22} color="rgba(255,255,255,0.7)" />
+                  </LinearGradient>
+                )}
                 <View style={s.artInfo}>
                   <View style={s.artCatWrap}>
                     <Text style={s.artCat}>{art.categorie}</Text>
@@ -156,6 +222,18 @@ const s = StyleSheet.create({
   userName: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
   notifBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   notifDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e', position: 'absolute', top: 8, right: 8, borderWidth: 1.5, borderColor: '#0d5068' },
+  missionActiveCard: {
+    backgroundColor: 'rgba(34,197,94,0.15)', borderRadius: 18, padding: 16,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1, borderColor: 'rgba(34,197,94,0.3)',
+  },
+  missionActivePulse: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(34,197,94,0.25)', alignItems: 'center', justifyContent: 'center',
+  },
+  missionActiveDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#22c55e' },
+  missionActiveTitle: { fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: 2 },
+  missionActiveSub: { fontSize: 12, color: 'rgba(255,255,255,0.65)' },
   ctaCard: { backgroundColor: '#fff', borderRadius: 18, padding: 18, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 20, elevation: 8 },
   ctaLeft: { flex: 1, marginRight: 12 },
   ctaTitle: { fontSize: 17, fontWeight: '800', color: '#0d5068', letterSpacing: -0.3, marginBottom: 4 },

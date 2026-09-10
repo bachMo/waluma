@@ -17,7 +17,7 @@ router.post('/', authenticate, requireRole('PATIENT'), creerMission)
 router.post('/:id/avis', authenticate, requireRole('PATIENT'), noterMission)
 
 // Praticien
-router.patch('/:id/statut', authenticate, requireRole('PRATICIEN', 'ADMIN'), updateStatutMission)
+router.patch('/:id/statut', authenticate, requireRole('PRATICIEN', 'ADMIN', 'PATIENT'), updateStatutMission)
 router.post('/:id/compte-rendu', authenticate, requireRole('PRATICIEN'), soumettreCompteRendu)
 
 // Admin

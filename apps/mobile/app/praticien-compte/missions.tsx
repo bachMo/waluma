@@ -17,6 +17,7 @@ interface Mission {
   createdAt: string
   finSoinAt: string | null
   patient: { nom: string; prenom: string }
+  paiement: { statut: string } | null
 }
 
 const SPEC_LABEL: Record<string, string> = {
@@ -27,6 +28,7 @@ const SPEC_LABEL: Record<string, string> = {
 
 const STATUT_CONFIG: Record<string, { color: string; bg: string; label: string }> = {
   TERMINEE: { color: '#15803d', bg: '#dcfce7', label: 'Terminée' },
+  TERMINEE_IMPAYEE: { color: '#d97706', bg: '#fef3c7', label: 'Paiement en attente' },
   ANNULEE: { color: '#dc2626', bg: '#fee2e2', label: 'Annulée' },
   EN_ATTENTE: { color: '#d97706', bg: '#fef3c7', label: 'En attente' },
   ACCEPTEE: { color: '#0d5068', bg: '#e0f2fe', label: 'Acceptée' },
@@ -51,9 +53,9 @@ export default function MissionsHistoriqueScreen() {
   useEffect(() => { load() }, [])
   const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
 
-  const terminées = missions.filter(m => m.statut === 'TERMINEE').length
+  const termineesPaye = missions.filter(m => m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE').length
   const gainTotal = Math.round(missions
-    .filter(m => m.statut === 'TERMINEE')
+    .filter(m => m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE')
     .reduce((sum, m) => sum + m.montantTotal * 0.9, 0))
 
   return (
@@ -66,11 +68,10 @@ export default function MissionsHistoriqueScreen() {
           <Text style={s.headerTitle}>Mes missions</Text>
           <View style={{ width: 36 }} />
         </View>
-
         <View style={s.statsRow}>
           {[
             { label: 'Total', value: missions.length.toString() },
-            { label: 'Terminées', value: terminées.toString() },
+            { label: 'Payées', value: termineesPaye.toString() },
             { label: 'Gain net', value: `${gainTotal.toLocaleString()} F` },
           ].map((stat, i) => (
             <View key={stat.label} style={[s.stat, i < 2 && s.statBorder]}>
@@ -96,7 +97,10 @@ export default function MissionsHistoriqueScreen() {
         >
           <View style={s.list}>
             {missions.map(m => {
-              const config = STATUT_CONFIG[m.statut] ?? STATUT_CONFIG.EN_ATTENTE
+              const statutKey = m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE'
+                ? 'TERMINEE_IMPAYEE'
+                : m.statut
+              const config = STATUT_CONFIG[statutKey] ?? STATUT_CONFIG.EN_ATTENTE
               return (
                 <TouchableOpacity
                   key={m.id}
@@ -118,7 +122,7 @@ export default function MissionsHistoriqueScreen() {
                     <View style={[s.statutBadge, { backgroundColor: config.bg }]}>
                       <Text style={[s.statutText, { color: config.color }]}>{config.label}</Text>
                     </View>
-                    {m.statut === 'TERMINEE' && (
+                    {m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE' && (
                       <Text style={s.gainText}>+{Math.round(m.montantTotal * 0.9).toLocaleString()} F</Text>
                     )}
                   </View>

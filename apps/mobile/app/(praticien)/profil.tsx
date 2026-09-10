@@ -4,7 +4,7 @@ import {
 } from 'react-native'
 import { router } from 'expo-router'
 import { useState, useEffect } from 'react'
-import { getUser, clearAuth, User } from '@/lib/auth'
+import { getUser, clearAuth, saveUser, User } from '@/lib/auth'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as ImagePicker from 'expo-image-picker'
@@ -30,19 +30,19 @@ export default function PraticienProfilScreen() {
   const [praticien, setPraticien] = useState<PraticienData | null>(null)
   const [totalMissions, setTotalMissions] = useState(0)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [photoUri, setPhotoUri] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const u = await getUser()
       setUser(u)
+      if (u?.avatarUrl) setAvatarUrl(u.avatarUrl)
       try {
         const [praticienRes, missionsRes] = await Promise.all([
           api.get('/praticiens/me'),
           api.get('/missions?limit=100'),
         ])
         setPraticien(praticienRes.data)
-        // Compter toutes les missions terminées du praticien
         const terminées = missionsRes.data.missions.filter(
           (m: { statut: string }) => m.statut === 'TERMINEE'
         ).length
@@ -74,45 +74,49 @@ export default function PraticienProfilScreen() {
     if (result.canceled) return
     setUploadingPhoto(true)
     try {
-      setPhotoUri(result.assets[0].uri)
+      const uri = result.assets[0].uri
+      const formData = new FormData()
+      formData.append('file', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as never)
+      const { data } = await api.post('/auth/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setAvatarUrl(data.avatarUrl)
+      if (user) await saveUser({ ...user, avatarUrl: data.avatarUrl })
+      Alert.alert('✓ Photo mise à jour')
     } catch {
-      Alert.alert('Erreur', 'Impossible de changer la photo')
+      Alert.alert('Erreur', 'Impossible de mettre à jour la photo')
     } finally {
       setUploadingPhoto(false)
     }
   }
 
-  function bientotDisponible() {
-    Alert.alert('Bientôt disponible', 'Cette fonctionnalité sera disponible dans une prochaine version.')
-  }
-
-const sections = [
-  {
-    title: 'Mon activité',
-    items: [
-      { icon: 'clipboard-outline', label: 'Mes missions', sub: `${totalMissions} mission(s) terminée(s)`, onPress: () => router.push('/praticien-compte/missions' as never) },
-      { icon: 'wallet-outline', label: 'Mes gains', onPress: () => router.push('/(praticien)/gains') },
-      { icon: 'star-outline', label: 'Mes avis', sub: praticien?.noteMoyenne ? `${praticien.noteMoyenne.toFixed(1)} / 5` : 'Aucun avis', onPress: () => router.push('/praticien-compte/avis' as never) },
-    ],
-  },
-  {
-    title: 'Mon profil professionnel',
-    items: [
-      { icon: 'document-text-outline', label: 'Mes documents', sub: `${praticien?.documents.length ?? 0} document(s)`, onPress: () => router.push('/praticien-compte/documents' as never) },
-      { icon: 'location-outline', label: 'Zone d\'intervention', onPress: () => router.push('/praticien-compte/zone' as never) },
-      { icon: 'medical-outline', label: 'Mes spécialités', onPress: () => router.push('/praticien-compte/specialites' as never) },
-      { icon: 'document-outline', label: 'Mes demandes', onPress: () => router.push('/praticien-compte/mes-demandes' as never) },
-    ],
-  },
-  {
-    title: 'Compte',
-    items: [
-{ icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/praticien-compte/notifications' as never) },
-{ icon: 'shield-checkmark-outline', label: 'Politique de confidentialité', onPress: () => router.push({ pathname: '/praticien-compte/legal', params: { type: 'politique' } } as never) },
-{ icon: 'help-circle-outline', label: 'Aide et support', onPress: () => router.push({ pathname: '/praticien-compte/legal', params: { type: 'aide' } } as never) },
-    ],
-  },
-]
+  const sections = [
+    {
+      title: 'Mon activité',
+      items: [
+        { icon: 'clipboard-outline', label: 'Mes missions', sub: `${totalMissions} mission(s) terminée(s)`, onPress: () => router.push('/praticien-compte/missions' as never) },
+        { icon: 'wallet-outline', label: 'Mes gains', onPress: () => router.push('/(praticien)/gains') },
+        { icon: 'star-outline', label: 'Mes avis', sub: praticien?.noteMoyenne ? `${praticien.noteMoyenne.toFixed(1)} / 5` : 'Aucun avis', onPress: () => router.push('/praticien-compte/avis' as never) },
+      ],
+    },
+    {
+      title: 'Mon profil professionnel',
+      items: [
+        { icon: 'document-text-outline', label: 'Mes documents', sub: `${praticien?.documents.length ?? 0} document(s)`, onPress: () => router.push('/praticien-compte/documents' as never) },
+        { icon: 'location-outline', label: 'Zone d\'intervention', onPress: () => router.push('/praticien-compte/zone' as never) },
+        { icon: 'medical-outline', label: 'Mes spécialités', onPress: () => router.push('/praticien-compte/specialites' as never) },
+        { icon: 'document-outline', label: 'Mes demandes', onPress: () => router.push('/praticien-compte/mes-demandes' as never) },
+      ],
+    },
+    {
+      title: 'Compte',
+      items: [
+        { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/praticien-compte/notifications' as never) },
+        { icon: 'shield-checkmark-outline', label: 'Politique de confidentialité', onPress: () => router.push({ pathname: '/praticien-compte/legal', params: { type: 'politique' } } as never) },
+        { icon: 'help-circle-outline', label: 'Aide et support', onPress: () => router.push({ pathname: '/praticien-compte/legal', params: { type: 'aide' } } as never) },
+      ],
+    },
+  ]
 
   const statutConfig = {
     VALIDE: { label: 'Compte validé', color: '#22c55e', bg: '#dcfce7' },
@@ -130,8 +134,8 @@ const sections = [
       <LinearGradient colors={['#0d5068', '#083d50']} style={s.headerGrad}>
         <View style={[s.header, { paddingTop: Platform.OS === 'android' ? 40 : 60 }]}>
           <TouchableOpacity style={s.avatarWrap} onPress={handleChangePhoto} disabled={uploadingPhoto}>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={s.avatar} />
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={s.avatar} />
             ) : (
               <LinearGradient colors={['#22c55e', '#16a34a']} style={s.avatar}>
                 <Text style={s.avatarText}>{(user?.prenom?.[0] ?? '') + (user?.nom?.[0] ?? '')}</Text>
@@ -147,14 +151,13 @@ const sections = [
           <Text style={s.name}>{user?.prenom} {user?.nom}</Text>
           {praticien && (
             <Text style={s.spec}>
-              {SPEC_LABEL[praticien.specialites.find(s => s.principale)?.specialite ?? ''] ?? ''}
+              {SPEC_LABEL[praticien.specialites.find(sp => sp.principale)?.specialite ?? ''] ?? ''}
             </Text>
           )}
           <View style={[s.statutBadge, { backgroundColor: sc.bg }]}>
             <View style={[s.statutDot, { backgroundColor: sc.color }]} />
             <Text style={[s.statutText, { color: sc.color }]}>{sc.label}</Text>
           </View>
-
           <View style={s.statsRow}>
             {[
               { label: 'Missions', value: totalMissions.toString() },
@@ -195,7 +198,6 @@ const sections = [
             </View>
           </View>
         ))}
-
         <View style={s.section}>
           <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
             <Ionicons name="log-out-outline" size={20} color="#dc2626" />

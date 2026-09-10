@@ -3,8 +3,8 @@ import {
   StyleSheet, SafeAreaView, StatusBar, Switch,
   ActivityIndicator, Alert, RefreshControl
 } from 'react-native'
-import { router } from 'expo-router'
-import { useState, useEffect, useCallback } from 'react'
+import { router, useFocusEffect } from 'expo-router'
+import { useState, useCallback } from 'react'
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { getUser } from '@/lib/auth'
@@ -28,16 +28,23 @@ interface Mission {
   urgence: boolean
   patient: { nom: string; prenom: string }
   createdAt: string
+  paiement: { statut: string } | null
 }
 
 const SPEC_LABEL: Record<string, string> = {
-  INFIRMIER: 'Infirmier·ère IDE',
-  MEDECIN_GENERALISTE: 'Médecin généraliste',
-  SAGE_FEMME: 'Sage-femme',
-  KINESITHERAPEUTE: 'Kinésithérapeute',
-  PRELEVEUR: 'Préleveur·se',
-  PEDIATRE: 'Pédiatre',
-  AUTRE: 'Autre',
+  INFIRMIER: 'Infirmier·ère IDE', MEDECIN_GENERALISTE: 'Médecin généraliste',
+  SAGE_FEMME: 'Sage-femme', KINESITHERAPEUTE: 'Kinésithérapeute',
+  PRELEVEUR: 'Préleveur·se', PEDIATRE: 'Pédiatre', AUTRE: 'Autre',
+}
+
+const STATUT_BADGE: Record<string, { color: string; bg: string; label: string }> = {
+  ACCEPTEE: { color: '#0d5068', bg: '#e0f2fe', label: 'Acceptée' },
+  EN_ROUTE: { color: '#7c3aed', bg: '#ede9fe', label: 'En route' },
+  ARRIVE: { color: '#0891b2', bg: '#cffafe', label: 'Arrivé' },
+  EN_COURS: { color: '#d97706', bg: '#fef3c7', label: 'En cours' },
+  TERMINEE: { color: '#15803d', bg: '#dcfce7', label: 'Terminée' },
+  TERMINEE_IMPAYEE: { color: '#d97706', bg: '#fef3c7', label: 'Paiement en attente' },
+  ANNULEE: { color: '#dc2626', bg: '#fee2e2', label: 'Annulée' },
 }
 
 export default function PraticienDashboard() {
@@ -53,7 +60,6 @@ export default function PraticienDashboard() {
       const user = await getUser()
       if (!user) { router.replace('/(auth)'); return }
       setUserName(user.prenom)
-
       const [praticienRes, missionsRes] = await Promise.all([
         api.get('/praticiens/me'),
         api.get('/missions?limit=10'),
@@ -66,7 +72,7 @@ export default function PraticienDashboard() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  useFocusEffect(useCallback(() => { load() }, []))
   const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
 
   async function toggleDisponibilite() {
@@ -98,76 +104,48 @@ export default function PraticienDashboard() {
                 <Text style={s.headerName}>{userName || '...'}</Text>
                 {praticien && (
                   <Text style={s.headerSpec}>
-                    {SPEC_LABEL[praticien.specialites.find(s => s.principale)?.specialite ?? ''] ?? ''}
+                    {SPEC_LABEL[praticien.specialites.find(sp => sp.principale)?.specialite ?? ''] ?? ''}
                   </Text>
                 )}
               </View>
-              <TouchableOpacity
-                style={s.notifBtn}
-                onPress={() => router.push('/(praticien)/profil')}
-              >
+              <TouchableOpacity style={s.notifBtn} onPress={() => router.push('/(praticien)/profil')}>
                 <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.8)" />
               </TouchableOpacity>
             </View>
-
-            {/* Toggle disponibilité */}
             <View style={[s.disponCard, praticien?.disponible && s.disponCardOn]}>
               <View style={s.disponLeft}>
                 <View style={[s.disponDot, praticien?.disponible && s.disponDotOn]} />
                 <View>
-                  <Text style={s.disponTitle}>
-                    {praticien?.disponible ? 'Disponible' : 'Indisponible'}
-                  </Text>
+                  <Text style={s.disponTitle}>{praticien?.disponible ? 'Disponible' : 'Indisponible'}</Text>
                   <Text style={s.disponSub}>
-                    {praticien?.disponible
-                      ? 'Vous recevrez des demandes de soin'
-                      : 'Activez pour recevoir des missions'}
+                    {praticien?.disponible ? 'Vous recevrez des demandes de soin' : 'Activez pour recevoir des missions'}
                   </Text>
                 </View>
               </View>
               {toggling
                 ? <ActivityIndicator color={praticien?.disponible ? '#22c55e' : '#888780'} />
-                : <Switch
-                    value={praticien?.disponible ?? false}
-                    onValueChange={toggleDisponibilite}
-                    trackColor={{ false: 'rgba(255,255,255,0.15)', true: '#22c55e' }}
-                    thumbColor="#fff"
-                  />
+                : <Switch value={praticien?.disponible ?? false} onValueChange={toggleDisponibilite} trackColor={{ false: 'rgba(255,255,255,0.15)', true: '#22c55e' }} thumbColor="#fff" />
               }
             </View>
           </View>
         </SafeAreaView>
       </LinearGradient>
 
-      <ScrollView
-        style={s.body}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d5068" />}
-      >
-        {/* Mission active */}
+      <ScrollView style={s.body} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d5068" />}>
         {missionActive && (
-          <TouchableOpacity
-            style={s.activeMission}
-            onPress={() => router.push({ pathname: '/(praticien)/mission', params: { missionId: missionActive.id } })}
-            activeOpacity={0.88}
-          >
+          <TouchableOpacity style={s.activeMission} onPress={() => router.push({ pathname: '/(praticien)/mission', params: { missionId: missionActive.id } })} activeOpacity={0.88}>
             <LinearGradient colors={['#22c55e', '#16a34a']} style={s.activeMissionGrad}>
               <View style={s.activeMissionTop}>
-                <View style={s.activePulse}>
-                  <View style={s.activeDot} />
-                </View>
+                <View style={s.activePulse}><View style={s.activeDot} /></View>
                 <Text style={s.activeMissionLabel}>Mission en cours</Text>
                 <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.7)" />
               </View>
-              <Text style={s.activeMissionSpec}>
-                {SPEC_LABEL[missionActive.specialite]} · {missionActive.patient.prenom} {missionActive.patient.nom}
-              </Text>
+              <Text style={s.activeMissionSpec}>{SPEC_LABEL[missionActive.specialite]} · {missionActive.patient.prenom} {missionActive.patient.nom}</Text>
               <Text style={s.activeMissionAddr} numberOfLines={1}>{missionActive.adresseTexte}</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
 
-        {/* Stats */}
         {praticien && (
           <View style={s.statsRow}>
             {[
@@ -184,7 +162,6 @@ export default function PraticienDashboard() {
           </View>
         )}
 
-        {/* Missions récentes */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>Dernières missions</Text>
           {loading ? (
@@ -196,43 +173,38 @@ export default function PraticienDashboard() {
               <Text style={s.emptySub}>Activez votre disponibilité pour recevoir des demandes</Text>
             </View>
           ) : (
-            missions.slice(0, 5).map(m => (
-              <TouchableOpacity
-                key={m.id}
-                style={s.missionCard}
-                onPress={() => router.push({ pathname: '/(praticien)/mission', params: { missionId: m.id } })}
-                activeOpacity={0.85}
-              >
-                <View style={[s.missionIcon, m.urgence && s.missionIconUrgent]}>
-                  <MaterialCommunityIcons
-                    name="needle"
-                    size={20}
-                    color={m.urgence ? '#dc2626' : '#0d5068'}
-                  />
-                </View>
-                <View style={s.missionInfo}>
-                  <View style={s.missionTop}>
-                    <Text style={s.missionSpec}>{SPEC_LABEL[m.specialite]}</Text>
-                    {m.urgence && (
-                      <View style={s.urgentBadge}>
-                        <Text style={s.urgentText}>URGENT</Text>
+            missions.slice(0, 5).map(m => {
+              const statutKey = m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE'
+                ? 'TERMINEE_IMPAYEE'
+                : m.statut
+              const badge = STATUT_BADGE[statutKey]
+              return (
+                <TouchableOpacity key={m.id} style={s.missionCard} onPress={() => router.push({ pathname: '/(praticien)/mission', params: { missionId: m.id } })} activeOpacity={0.85}>
+                  <View style={[s.missionIcon, m.urgence && s.missionIconUrgent]}>
+                    <MaterialCommunityIcons name="needle" size={20} color={m.urgence ? '#dc2626' : '#0d5068'} />
+                  </View>
+                  <View style={s.missionInfo}>
+                    <View style={s.missionTop}>
+                      <Text style={s.missionSpec}>{SPEC_LABEL[m.specialite]}</Text>
+                      {m.urgence && <View style={s.urgentBadge}><Text style={s.urgentText}>URGENT</Text></View>}
+                    </View>
+                    <Text style={s.missionPatient}>{m.patient.prenom} {m.patient.nom}</Text>
+                    <Text style={s.missionAddr} numberOfLines={1}>{m.adresseTexte}</Text>
+                  </View>
+                  <View style={s.missionRight}>
+                    <Text style={s.missionMontant}>{m.montantTotal.toLocaleString()} F</Text>
+                    <Text style={s.missionDate}>{new Date(m.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}</Text>
+                    {badge && (
+                      <View style={[s.statutBadge, { backgroundColor: badge.bg }]}>
+                        <Text style={[s.statutText, { color: badge.color }]}>{badge.label}</Text>
                       </View>
                     )}
                   </View>
-                  <Text style={s.missionPatient}>{m.patient.prenom} {m.patient.nom}</Text>
-                  <Text style={s.missionAddr} numberOfLines={1}>{m.adresseTexte}</Text>
-                </View>
-                <View style={s.missionRight}>
-                  <Text style={s.missionMontant}>{m.montantTotal.toLocaleString()} F</Text>
-                  <Text style={s.missionDate}>
-                    {new Date(m.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            ))
+                </TouchableOpacity>
+              )
+            })
           )}
         </View>
-
         <View style={{ height: 32 }} />
       </ScrollView>
     </View>
@@ -248,10 +220,7 @@ const s = StyleSheet.create({
   headerName: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
   headerSpec: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   notifBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
-  disponCard: {
-    backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-  },
+  disponCard: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   disponCardOn: { backgroundColor: 'rgba(34,197,94,0.15)' },
   disponLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
   disponDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#888780' },
@@ -268,25 +237,15 @@ const s = StyleSheet.create({
   activeMissionSpec: { fontSize: 16, fontWeight: '800', color: '#fff', letterSpacing: -0.3, marginBottom: 4 },
   activeMissionAddr: { fontSize: 12, color: 'rgba(255,255,255,0.7)' },
   statsRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginTop: 16 },
-  statCard: {
-    flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 14, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
+  statCard: { flex: 1, backgroundColor: '#fff', borderRadius: 16, padding: 14, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   statValue: { fontSize: 16, fontWeight: '800', color: '#1a1a18', marginBottom: 2 },
   statLabel: { fontSize: 10, fontWeight: '600', color: '#888780', textTransform: 'uppercase', letterSpacing: 0.5 },
   section: { paddingHorizontal: 16, marginTop: 20 },
   sectionTitle: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, textTransform: 'uppercase', color: '#888780', marginBottom: 12 },
-  emptyCard: {
-    backgroundColor: '#fff', borderRadius: 18, padding: 32, alignItems: 'center',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
+  emptyCard: { backgroundColor: '#fff', borderRadius: 18, padding: 32, alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   emptyText: { fontSize: 15, fontWeight: '700', color: '#1a1a18', marginTop: 12, marginBottom: 6 },
   emptySub: { fontSize: 12, color: '#888780', textAlign: 'center', lineHeight: 17 },
-  missionCard: {
-    backgroundColor: '#fff', borderRadius: 16, padding: 14, flexDirection: 'row',
-    alignItems: 'center', gap: 12, marginBottom: 10,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2,
-  },
+  missionCard: { backgroundColor: '#fff', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
   missionIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#e0f2fe', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   missionIconUrgent: { backgroundColor: '#fee2e2' },
   missionInfo: { flex: 1 },
@@ -296,8 +255,9 @@ const s = StyleSheet.create({
   urgentText: { fontSize: 9, fontWeight: '800', color: '#dc2626', letterSpacing: 0.5 },
   missionPatient: { fontSize: 12, color: '#5f5e5a', marginBottom: 2 },
   missionAddr: { fontSize: 11, color: '#b4b2a9' },
-  missionRight: { alignItems: 'flex-end' },
-  missionMontant: { fontSize: 13, fontWeight: '700', color: '#0d5068', marginBottom: 3 },
-  
-  missionDate: { fontSize: 10, color: '#b4b2a9' },
+  missionRight: { alignItems: 'flex-end', gap: 3 },
+  missionMontant: { fontSize: 13, fontWeight: '700', color: '#0d5068', marginBottom: 2 },
+  missionDate: { fontSize: 10, color: '#b4b2a9', marginBottom: 2 },
+  statutBadge: { paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 },
+  statutText: { fontSize: 9, fontWeight: '700' },
 })

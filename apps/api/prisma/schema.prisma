@@ -135,6 +135,7 @@ model User {
   notifications Notification[]
 
   demandes     Demande[]
+  avatarUrl    String?
 
   pushTokens  PushToken[]
 

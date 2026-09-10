@@ -6,6 +6,7 @@ export interface User {
   prenom: string
   role: 'PATIENT' | 'PRATICIEN' | 'ADMIN'
   telephone: string
+  avatarUrl: string
 }
 
 export async function saveAuth(user: User, accessToken: string, refreshToken: string) {
@@ -37,4 +38,8 @@ export async function clearAuth() {
 export async function isAuthenticated(): Promise<boolean> {
   const token = await SecureStore.getItemAsync('waluma_access_token')
   return !!token
+}
+
+export async function saveUser(user: User): Promise<void> {
+  await SecureStore.setItemAsync('user', JSON.stringify(user))
 }

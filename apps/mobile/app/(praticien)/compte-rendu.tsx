@@ -29,7 +29,20 @@ export default function CompteRenduScreen() {
   const [showConstantes, setShowConstantes] = useState(false)
 
   function setC(key: keyof ConstantesVitales, val: string) {
-    setConstantes(prev => ({ ...prev, [key]: val }))
+    // Pour la température : accepter virgule et point
+    if (key === 'temperature') {
+      // Autoriser chiffres, virgule, point uniquement
+      const cleaned = val.replace(/[^0-9.,]/g, '').replace(',', '.')
+      setConstantes(prev => ({ ...prev, [key]: val.replace(/[^0-9.,]/g, '') }))
+      return
+    }
+    // Pour la tension : texte libre (format 120/80)
+    if (key === 'tension') {
+      setConstantes(prev => ({ ...prev, [key]: val }))
+      return
+    }
+    // Pour pouls et spo2 : chiffres uniquement
+    setConstantes(prev => ({ ...prev, [key]: val.replace(/[^0-9]/g, '') }))
   }
 
   async function handleSubmit() {
@@ -44,7 +57,7 @@ export default function CompteRenduScreen() {
 
     Alert.alert(
       'Soumettre le compte rendu',
-      'Une fois soumis, la mission sera marquée comme terminée.',
+      'Une fois soumis, la mission sera marquée comme terminée. Le patient recevra une notification pour effectuer le paiement.',
       [
         { text: 'Annuler', style: 'cancel' },
         {
@@ -52,22 +65,25 @@ export default function CompteRenduScreen() {
           onPress: async () => {
             setLoading(true)
             try {
+              // Normaliser la température : accepter virgule et point
+              const tempStr = constantes.temperature.replace(',', '.')
+              const tempVal = tempStr ? parseFloat(tempStr) : undefined
+
               await api.post(`/missions/${missionId}/compte-rendu`, {
                 acteRealise,
                 description,
-                recommandations: recommandations || undefined,
-                suiteNecessaire: suiteNecessaire || undefined,
-                tension: constantes.tension || undefined,
-                temperature: constantes.temperature ? parseFloat(constantes.temperature) : undefined,
+                recommandations: recommandations.trim() || undefined,
+                suiteNecessaire: suiteNecessaire.trim() || undefined,
+                tension: constantes.tension.trim() || undefined,
+                temperature: tempVal && !isNaN(tempVal) ? tempVal : undefined,
                 pouls: constantes.pouls ? parseInt(constantes.pouls) : undefined,
                 spo2: constantes.spo2 ? parseInt(constantes.spo2) : undefined,
               })
-              Alert.alert('✓ Mission terminée', 'Le compte rendu a été enregistré et la mission est clôturée.', [
-                { text: 'OK', onPress: () => {
-  router.dismissAll()
-  router.replace('/(praticien)' as never)
-}},
-              ])
+              Alert.alert(
+                '✓ Compte rendu soumis',
+                'La mission est clôturée. Le patient sera invité à effectuer le paiement. Votre gain sera disponible après confirmation.',
+                [{ text: 'OK', onPress: () => router.replace('/(praticien)' as never) }]
+              )
             } catch {
               Alert.alert('Erreur', 'Impossible de soumettre le compte rendu')
             } finally {
@@ -78,6 +94,38 @@ export default function CompteRenduScreen() {
       ]
     )
   }
+
+  // Config des constantes avec keyboards adaptés
+  const CONSTANTES_CONFIG = [
+    {
+      key: 'tension' as const,
+      label: 'Tension artérielle',
+      unit: 'mmHg',
+      placeholder: '120/80',
+      keyboardType: 'default' as const, // texte libre pour le slash
+    },
+    {
+      key: 'temperature' as const,
+      label: 'Température',
+      unit: '°C',
+      placeholder: '37,2',
+      keyboardType: 'decimal-pad' as const,
+    },
+    {
+      key: 'pouls' as const,
+      label: 'Pouls',
+      unit: 'bpm',
+      placeholder: '72',
+      keyboardType: 'number-pad' as const,
+    },
+    {
+      key: 'spo2' as const,
+      label: 'SpO₂',
+      unit: '%',
+      placeholder: '98',
+      keyboardType: 'number-pad' as const,
+    },
+  ]
 
   return (
     <View style={s.root}>
@@ -100,11 +148,10 @@ export default function CompteRenduScreen() {
           <View style={s.infoCard}>
             <Ionicons name="information-circle" size={18} color="#0d5068" />
             <Text style={s.infoText}>
-              Ce document sera partagé avec le patient et archivé dans son dossier médical.
+              Ce document sera partagé avec le patient et archivé dans son dossier médical. Le patient devra effectuer le paiement après validation du CR.
             </Text>
           </View>
 
-          {/* Acte réalisé */}
           <View style={s.section}>
             <Text style={s.label}>Acte réalisé <Text style={s.required}>*</Text></Text>
             <TextInput
@@ -116,7 +163,6 @@ export default function CompteRenduScreen() {
             />
           </View>
 
-          {/* Description */}
           <View style={s.section}>
             <Text style={s.label}>Compte rendu détaillé <Text style={s.required}>*</Text></Text>
             <TextInput
@@ -133,29 +179,18 @@ export default function CompteRenduScreen() {
 
           {/* Constantes vitales */}
           <View style={s.section}>
-            <TouchableOpacity
-              style={s.toggleRow}
-              onPress={() => setShowConstantes(!showConstantes)}
-            >
+            <TouchableOpacity style={s.toggleRow} onPress={() => setShowConstantes(!showConstantes)}>
               <View style={s.toggleLeft}>
                 <Ionicons name="pulse" size={18} color="#0d5068" />
                 <Text style={s.toggleLabel}>Constantes vitales</Text>
                 <Text style={s.toggleOptional}>(optionnel)</Text>
               </View>
-              <Ionicons
-                name={showConstantes ? 'chevron-up' : 'chevron-down'}
-                size={18} color="#888780"
-              />
+              <Ionicons name={showConstantes ? 'chevron-up' : 'chevron-down'} size={18} color="#888780" />
             </TouchableOpacity>
 
             {showConstantes && (
               <View style={s.constantesGrid}>
-                {[
-                  { key: 'tension' as const, label: 'Tension artérielle', unit: 'mmHg', placeholder: '120/80' },
-                  { key: 'temperature' as const, label: 'Température', unit: '°C', placeholder: '37.2' },
-                  { key: 'pouls' as const, label: 'Pouls', unit: 'bpm', placeholder: '72' },
-                  { key: 'spo2' as const, label: 'SpO₂', unit: '%', placeholder: '98' },
-                ].map(c => (
+                {CONSTANTES_CONFIG.map(c => (
                   <View key={c.key} style={s.constanteItem}>
                     <Text style={s.constanteLabel}>{c.label}</Text>
                     <View style={s.constanteInputWrap}>
@@ -165,17 +200,25 @@ export default function CompteRenduScreen() {
                         onChangeText={v => setC(c.key, v)}
                         placeholder={c.placeholder}
                         placeholderTextColor="#d1d0c9"
-                        keyboardType="numeric"
+                        keyboardType={c.keyboardType}
+                        autoCorrect={false}
+                        autoCapitalize="none"
                       />
                       <Text style={s.constanteUnit}>{c.unit}</Text>
                     </View>
+                    {/* Aide contextuelle */}
+                    {c.key === 'tension' && (
+                      <Text style={s.constanteHint}>Format : 120/80</Text>
+                    )}
+                    {c.key === 'temperature' && (
+                      <Text style={s.constanteHint}>Ex : 37,2 ou 37.2</Text>
+                    )}
                   </View>
                 ))}
               </View>
             )}
           </View>
 
-          {/* Recommandations */}
           <View style={s.section}>
             <Text style={s.label}>Recommandations <Text style={s.optional}>(optionnel)</Text></Text>
             <TextInput
@@ -190,7 +233,6 @@ export default function CompteRenduScreen() {
             />
           </View>
 
-          {/* Suite nécessaire */}
           <View style={s.section}>
             <Text style={s.label}>Suite nécessaire <Text style={s.optional}>(optionnel)</Text></Text>
             <TextInput
@@ -233,45 +275,28 @@ const s = StyleSheet.create({
   backBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#fff' },
   body: { flex: 1 },
-  infoCard: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
-    backgroundColor: '#e0f2fe', margin: 16, borderRadius: 14, padding: 14,
-    borderWidth: 0.5, borderColor: 'rgba(13,80,104,0.2)',
-  },
+  infoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#e0f2fe', margin: 16, borderRadius: 14, padding: 14, borderWidth: 0.5, borderColor: 'rgba(13,80,104,0.2)' },
   infoText: { flex: 1, fontSize: 12, color: '#0d5068', lineHeight: 18 },
   section: { paddingHorizontal: 16, marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '700', color: '#1a1a18', marginBottom: 8 },
   required: { color: '#dc2626' },
   optional: { fontSize: 11, color: '#888780', fontWeight: '500' },
-  input: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    fontSize: 14, color: '#1a1a18', borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.1)',
-  },
+  input: { backgroundColor: '#fff', borderRadius: 14, padding: 14, fontSize: 14, color: '#1a1a18', borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.1)' },
   textarea: { minHeight: 120, lineHeight: 21 },
   textareaSm: { minHeight: 80, lineHeight: 21 },
-  toggleRow: {
-    backgroundColor: '#fff', borderRadius: 14, padding: 14,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.1)', marginBottom: 8,
-  },
+  toggleRow: { backgroundColor: '#fff', borderRadius: 14, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.1)', marginBottom: 8 },
   toggleLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   toggleLabel: { fontSize: 14, fontWeight: '600', color: '#1a1a18' },
   toggleOptional: { fontSize: 11, color: '#888780' },
   constantesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   constanteItem: { width: '48%' },
   constanteLabel: { fontSize: 11, fontWeight: '600', color: '#5f5e5a', marginBottom: 6 },
-  constanteInputWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden',
-    borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.1)',
-  },
+  constanteInputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff', borderRadius: 12, overflow: 'hidden', borderWidth: 0.5, borderColor: 'rgba(0,0,0,0.1)' },
   constanteInput: { flex: 1, padding: 12, fontSize: 15, fontWeight: '600', color: '#1a1a18' },
   constanteUnit: { paddingHorizontal: 10, fontSize: 11, color: '#888780', fontWeight: '600', backgroundColor: '#f5f4ef', paddingVertical: 12 },
+  constanteHint: { fontSize: 10, color: '#b4b2a9', marginTop: 4, paddingLeft: 2 },
   footer: { padding: 16, backgroundColor: '#fff', borderTopWidth: 0.5, borderTopColor: 'rgba(0,0,0,0.06)' },
-  submitBtn: {
-    backgroundColor: '#22c55e', borderRadius: 16, padding: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-  },
+  submitBtn: { backgroundColor: '#22c55e', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
   submitBtnDisabled: { opacity: 0.5 },
   submitText: { fontSize: 16, fontWeight: '700', color: '#fff' },
 })

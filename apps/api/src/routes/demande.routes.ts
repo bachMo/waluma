@@ -93,4 +93,19 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   await prisma.demande.delete({ where: { id } })
   res.json({ message: 'Demande supprimée' })
 })
+
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  const { id } = req.params
+  const demande = await prisma.demande.findUnique({ where: { id } })
+  if (!demande || demande.userId !== req.user!.userId) {
+    res.status(403).json({ error: 'Accès interdit' })
+    return
+  }
+  if (['TRAITEE', 'REFUSEE'].includes(demande.statut)) {
+    res.status(400).json({ error: 'Impossible de supprimer une demande déjà traitée' })
+    return
+  }
+  await prisma.demande.delete({ where: { id } })
+  res.json({ message: 'Demande supprimée' })
+})
 export default router

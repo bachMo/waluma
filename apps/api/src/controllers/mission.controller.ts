@@ -116,6 +116,7 @@ export async function listMissions(req: AuthRequest, res: Response): Promise<voi
         praticien: {
           include: { user: { select: { nom: true, prenom: true, telephone: true } } },
         },
+        paiement: { select: { statut: true } },
       },
       skip,
       take: parseInt(limit as string),
@@ -171,6 +172,22 @@ export async function updateStatutMission(req: AuthRequest, res: Response): Prom
     EN_COURS: 'debutSoinAt', TERMINEE: 'finSoinAt', ANNULEE: 'annuleeAt',
   }
 
+  // Vérifier les permissions selon le rôle
+const missionActuelle = await prisma.mission.findUnique({ where: { id } })
+if (!missionActuelle) { res.status(404).json({ error: 'Mission introuvable' }); return }
+
+if (req.user?.role === 'PATIENT') {
+  // Le patient ne peut qu'annuler, et seulement si EN_ATTENTE ou ACCEPTEE
+  if (statut !== 'ANNULEE') {
+    res.status(403).json({ error: 'Non autorisé' }); return
+  }
+  if (!['EN_ATTENTE', 'ACCEPTEE'].includes(missionActuelle.statut)) {
+    res.status(400).json({ error: 'Impossible d\'annuler une mission déjà démarrée' }); return
+  }
+  if (missionActuelle.patientId !== req.user.userId) {
+    res.status(403).json({ error: 'Non autorisé' }); return
+  }
+}
   const updateData: Record<string, unknown> = { statut }
   if (timestampField[statut]) updateData[timestampField[statut]] = new Date()
 

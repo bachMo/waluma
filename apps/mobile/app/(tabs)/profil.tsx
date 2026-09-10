@@ -4,7 +4,7 @@ import {
 } from 'react-native'
 import { router } from 'expo-router'
 import { useState, useEffect } from 'react'
-import { getUser, clearAuth, User } from '@/lib/auth'
+import { getUser, clearAuth, saveUser, User } from '@/lib/auth'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as ImagePicker from 'expo-image-picker'
@@ -21,12 +21,13 @@ export default function ProfilScreen() {
   const [stats, setStats] = useState<Stats>({ totalMissions: 0, missionsCetteAnnee: 0, noteMoyenne: null })
   const [loadingStats, setLoadingStats] = useState(true)
   const [uploadingPhoto, setUploadingPhoto] = useState(false)
-  const [photoUri, setPhotoUri] = useState<string | null>(null)
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
 
   useEffect(() => {
     async function load() {
       const u = await getUser()
       setUser(u)
+      if (u?.avatarUrl) setAvatarUrl(u.avatarUrl)
       try {
         const { data } = await api.get('/missions?limit=100')
         const missions = data.missions
@@ -34,12 +35,11 @@ export default function ProfilScreen() {
         const missionsCetteAnnee = missions.filter((m: { createdAt: string }) =>
           new Date(m.createdAt).getFullYear() === anneeEnCours
         ).length
-        const avisData = await api.get('/missions?statut=TERMINEE&limit=100')
-        const avisNotes = avisData.data.missions
-          .filter((m: { avis?: { note: number } }) => m.avis?.note)
-          .map((m: { avis: { note: number } }) => m.avis.note)
-        const noteMoyenne = avisNotes.length
-          ? avisNotes.reduce((a: number, b: number) => a + b, 0) / avisNotes.length
+        const terminées = missions.filter((m: { statut: string; avis?: { note: number } }) =>
+          m.statut === 'TERMINEE' && m.avis?.note
+        )
+        const noteMoyenne = terminées.length
+          ? terminées.reduce((a: number, m: { avis: { note: number } }) => a + m.avis.note, 0) / terminées.length
           : null
         setStats({ totalMissions: missions.length, missionsCetteAnnee, noteMoyenne })
       } catch {} finally {
@@ -74,43 +74,45 @@ export default function ProfilScreen() {
       const uri = result.assets[0].uri
       const formData = new FormData()
       formData.append('file', { uri, name: 'avatar.jpg', type: 'image/jpeg' } as never)
-      setPhotoUri(uri)
+      const { data } = await api.post('/auth/avatar', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      })
+      setAvatarUrl(data.avatarUrl)
+      // Mettre à jour le user local avec la nouvelle avatarUrl
+      if (user) await saveUser({ ...user, avatarUrl: data.avatarUrl })
+      Alert.alert('✓ Photo mise à jour')
     } catch {
-      Alert.alert('Erreur', 'Impossible de changer la photo')
+      Alert.alert('Erreur', 'Impossible de mettre à jour la photo')
     } finally {
       setUploadingPhoto(false)
     }
   }
 
-  function bientotDisponible() {
-    Alert.alert('Bientôt disponible', 'Cette fonctionnalité sera disponible dans une prochaine version.')
-  }
-
-const sections = [
-  {
-    title: 'Mon compte',
-    items: [
-      { icon: 'person-circle-outline', label: 'Informations personnelles', sub: user?.telephone ?? '', onPress: () => router.push('/compte/infos' as never) },
-      { icon: 'location-outline', label: 'Mes adresses', onPress: () => router.push('/compte/adresses' as never) },
-      { icon: 'card-outline', label: 'Moyens de paiement', onPress: () => router.push('/compte/paiements' as never) },
-    ],
-  },
-  {
-    title: 'Préférences',
-    items: [
-      { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/compte/notifications' as never) },
-      { icon: 'language-outline', label: 'Langue', sub: 'Français', onPress: () => Alert.alert('Langue', 'Seul le français est disponible pour l\'instant.') },
-    ],
-  },
-  {
-    title: 'Informations légales',
-    items: [
-      { icon: 'shield-checkmark-outline', label: 'Politique de confidentialité', onPress: () => router.push({ pathname: '/compte/legal', params: { type: 'politique' } } as never) },
-      { icon: 'document-text-outline', label: "Conditions d'utilisation", onPress: () => router.push({ pathname: '/compte/legal', params: { type: 'cgu' } } as never) },
-      { icon: 'help-circle-outline', label: 'Aide et support', onPress: () => router.push({ pathname: '/compte/legal', params: { type: 'aide' } } as never) },
-    ],
-  },
-]
+  const sections = [
+    {
+      title: 'Mon compte',
+      items: [
+        { icon: 'person-circle-outline', label: 'Informations personnelles', sub: user?.telephone ?? '', onPress: () => router.push('/compte/infos' as never) },
+        { icon: 'location-outline', label: 'Mes adresses', onPress: () => router.push('/compte/adresses' as never) },
+        { icon: 'card-outline', label: 'Moyens de paiement', onPress: () => router.push('/compte/paiements' as never) },
+      ],
+    },
+    {
+      title: 'Préférences',
+      items: [
+        { icon: 'notifications-outline', label: 'Notifications', onPress: () => router.push('/compte/notifications' as never) },
+        { icon: 'language-outline', label: 'Langue', sub: 'Français', onPress: () => Alert.alert('Langue', 'Seul le français est disponible pour l\'instant.') },
+      ],
+    },
+    {
+      title: 'Informations légales',
+      items: [
+        { icon: 'shield-checkmark-outline', label: 'Politique de confidentialité', onPress: () => router.push({ pathname: '/compte/legal', params: { type: 'politique' } } as never) },
+        { icon: 'document-text-outline', label: "Conditions d'utilisation", onPress: () => router.push({ pathname: '/compte/legal', params: { type: 'cgu' } } as never) },
+        { icon: 'help-circle-outline', label: 'Aide et support', onPress: () => router.push({ pathname: '/compte/legal', params: { type: 'aide' } } as never) },
+      ],
+    },
+  ]
 
   return (
     <View style={s.root}>
@@ -118,8 +120,8 @@ const sections = [
       <LinearGradient colors={['#0d5068', '#0a3f52']} style={s.headerGrad}>
         <View style={[s.header, { paddingTop: Platform.OS === 'android' ? 40 : 60 }]}>
           <TouchableOpacity style={s.avatarWrap} onPress={handleChangePhoto} disabled={uploadingPhoto}>
-            {photoUri ? (
-              <Image source={{ uri: photoUri }} style={s.avatar} />
+            {avatarUrl ? (
+              <Image source={{ uri: avatarUrl }} style={s.avatar} />
             ) : (
               <LinearGradient colors={['#22c55e', '#16a34a']} style={s.avatar}>
                 <Text style={s.avatarText}>{(user?.prenom?.[0] ?? '') + (user?.nom?.[0] ?? '')}</Text>
@@ -134,7 +136,6 @@ const sections = [
           </TouchableOpacity>
           <Text style={s.name}>{user?.prenom} {user?.nom}</Text>
           <Text style={s.phone}>{user?.telephone}</Text>
-
           <View style={s.statsRow}>
             {loadingStats ? (
               <ActivityIndicator color="rgba(255,255,255,0.5)" />
@@ -179,7 +180,6 @@ const sections = [
             </View>
           </View>
         ))}
-
         <View style={s.section}>
           <TouchableOpacity style={s.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
             <Ionicons name="log-out-outline" size={20} color="#dc2626" />

@@ -1,9 +1,9 @@
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, RefreshControl, Platform
+  ActivityIndicator, RefreshControl, Platform, Alert
 } from 'react-native'
-import { router } from 'expo-router'
-import { useState, useEffect, useCallback } from 'react'
+import { router, useFocusEffect } from 'expo-router'
+import { useState, useCallback } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import api from '@/lib/api'
@@ -32,6 +32,8 @@ const STATUT_CONFIG: Record<string, { label: string; color: string; bg: string; 
   REFUSEE: { label: 'Refusée', color: '#dc2626', bg: '#fee2e2', icon: 'close-circle-outline' },
 }
 
+const MODIFIABLE = ['EN_ATTENTE', 'EN_COURS']
+
 export default function MesDemandesScreen() {
   const [demandes, setDemandes] = useState<Demande[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,12 +50,33 @@ export default function MesDemandesScreen() {
     }
   }
 
-  useEffect(() => { load() }, [])
+  // Rafraîchir à chaque fois qu'on revient sur cette page (après création)
+  useFocusEffect(useCallback(() => { load() }, []))
   const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
+
+  async function handleDelete(id: string) {
+    Alert.alert('Supprimer la demande', 'Voulez-vous vraiment supprimer cette demande ?', [
+      { text: 'Annuler', style: 'cancel' },
+      {
+        text: 'Supprimer', style: 'destructive',
+        onPress: async () => {
+          try {
+            await api.delete(`/demandes/${id}`)
+            setSelected(null)
+            load()
+          } catch {
+            Alert.alert('Erreur', 'Impossible de supprimer cette demande')
+          }
+        },
+      },
+    ])
+  }
 
   if (selected) {
     const typeConf = TYPE_CONFIG[selected.type] ?? TYPE_CONFIG.AUTRE
     const statutConf = STATUT_CONFIG[selected.statut] ?? STATUT_CONFIG.EN_ATTENTE
+    const peutModifier = MODIFIABLE.includes(selected.statut)
+
     return (
       <View style={s.root}>
         <LinearGradient colors={['#0d5068', '#083d50']} style={s.headerGrad}>
@@ -67,13 +90,11 @@ export default function MesDemandesScreen() {
         </LinearGradient>
 
         <ScrollView style={s.body} showsVerticalScrollIndicator={false}>
-          {/* Statut */}
           <View style={[s.statutBanner, { backgroundColor: statutConf.bg }]}>
             <Ionicons name={statutConf.icon as never} size={20} color={statutConf.color} />
             <Text style={[s.statutBannerText, { color: statutConf.color }]}>{statutConf.label}</Text>
           </View>
 
-          {/* Infos */}
           <View style={s.detailCard}>
             <View style={s.detailRow}>
               <View style={[s.typeIcon, { backgroundColor: typeConf.bg }]}>
@@ -88,7 +109,6 @@ export default function MesDemandesScreen() {
             </View>
           </View>
 
-          {/* Description */}
           <View style={s.section}>
             <Text style={s.sectionTitle}>Votre demande</Text>
             <View style={s.contentCard}>
@@ -105,7 +125,6 @@ export default function MesDemandesScreen() {
             </View>
           ) : null}
 
-          {/* Réponse admin */}
           {selected.reponseAdmin ? (
             <View style={s.section}>
               <Text style={s.sectionTitle}>Réponse de l'équipe Waluma</Text>
@@ -137,6 +156,28 @@ export default function MesDemandesScreen() {
             </View>
           )}
 
+          {peutModifier && (
+            <View style={s.actionsSection}>
+              <TouchableOpacity
+                style={s.editBtn}
+                onPress={() => {
+                  setSelected(null)
+                  router.push({
+                    pathname: '/praticien-compte/demande',
+                    params: { type: selected.type, editId: selected.id, editDesc: selected.description, editDetails: selected.details },
+                  } as never)
+                }}
+              >
+                <Ionicons name="pencil-outline" size={18} color="#0d5068" />
+                <Text style={s.editBtnText}>Modifier la demande</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.deleteBtn} onPress={() => handleDelete(selected.id)}>
+                <Ionicons name="trash-outline" size={18} color="#dc2626" />
+                <Text style={s.deleteBtnText}>Supprimer la demande</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={{ height: 32 }} />
         </ScrollView>
       </View>
@@ -151,10 +192,7 @@ export default function MesDemandesScreen() {
             <Ionicons name="chevron-back" size={22} color="#fff" />
           </TouchableOpacity>
           <Text style={s.headerTitle}>Mes demandes</Text>
-          <TouchableOpacity
-            style={s.addBtn}
-            onPress={() => router.push('/praticien-compte/demande' as never)}
-          >
+          <TouchableOpacity style={s.addBtn} onPress={() => router.push('/praticien-compte/demande' as never)}>
             <Ionicons name="add" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
@@ -173,10 +211,7 @@ export default function MesDemandesScreen() {
               <Ionicons name="document-outline" size={48} color="#d1d0c9" />
               <Text style={s.emptyTitle}>Aucune demande</Text>
               <Text style={s.emptySub}>Faites une demande pour modifier votre profil professionnel</Text>
-              <TouchableOpacity
-                style={s.createBtn}
-                onPress={() => router.push('/praticien-compte/demande' as never)}
-              >
+              <TouchableOpacity style={s.createBtn} onPress={() => router.push('/praticien-compte/demande' as never)}>
                 <Ionicons name="add" size={18} color="#fff" />
                 <Text style={s.createBtnText}>Nouvelle demande</Text>
               </TouchableOpacity>
@@ -187,12 +222,7 @@ export default function MesDemandesScreen() {
                 const typeConf = TYPE_CONFIG[d.type] ?? TYPE_CONFIG.AUTRE
                 const statutConf = STATUT_CONFIG[d.statut] ?? STATUT_CONFIG.EN_ATTENTE
                 return (
-                  <TouchableOpacity
-                    key={d.id}
-                    style={s.demandeCard}
-                    onPress={() => setSelected(d)}
-                    activeOpacity={0.85}
-                  >
+                  <TouchableOpacity key={d.id} style={s.demandeCard} onPress={() => setSelected(d)} activeOpacity={0.85}>
                     <View style={[s.typeIcon, { backgroundColor: typeConf.bg }]}>
                       <Ionicons name={typeConf.icon as never} size={20} color={typeConf.color} />
                     </View>
@@ -250,7 +280,6 @@ const s = StyleSheet.create({
   statutText: { fontSize: 10, fontWeight: '700' },
   reponseDot: { backgroundColor: '#e0f2fe', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   reponseDotText: { fontSize: 9, fontWeight: '700', color: '#0d5068' },
-  // Détail
   statutBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, margin: 16, borderRadius: 14, padding: 14 },
   statutBannerText: { fontSize: 15, fontWeight: '700' },
   detailCard: { backgroundColor: '#fff', marginHorizontal: 16, marginBottom: 8, borderRadius: 18, padding: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
@@ -270,4 +299,9 @@ const s = StyleSheet.create({
   reponseText: { fontSize: 14, color: '#3a3a38', lineHeight: 22 },
   enAttenteCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#fef3c7', borderRadius: 14, padding: 14, borderWidth: 0.5, borderColor: '#fcd34d' },
   enAttenteText: { flex: 1, fontSize: 13, color: '#92400e', lineHeight: 19 },
+  actionsSection: { paddingHorizontal: 16, marginBottom: 16, gap: 10 },
+  editBtn: { backgroundColor: '#e0f2fe', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  editBtnText: { fontSize: 14, fontWeight: '700', color: '#0d5068' },
+  deleteBtn: { backgroundColor: '#fee2e2', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+  deleteBtnText: { fontSize: 14, fontWeight: '700', color: '#dc2626' },
 })
