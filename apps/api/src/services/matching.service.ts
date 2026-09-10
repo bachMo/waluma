@@ -6,21 +6,23 @@ interface MatchingOptions {
   longitude?: number
   urgence?: boolean
   rayonKm?: number
+  excludePraticienIds?: string[]
 }
 
 export async function findBestPraticien(options: MatchingOptions) {
-  const { specialite, urgence = false, rayonKm = 10 } = options
+  const { specialite, urgence = false, rayonKm = 10, excludePraticienIds = [] } = options
 
   const praticiens = await prisma.praticien.findMany({
     where: {
       statutCompte: 'VALIDE',
       disponible: true,
+      id: excludePraticienIds.length > 0 ? { notIn: excludePraticienIds } : undefined,
       specialites: urgence
         ? undefined
         : { some: { specialite: specialite as never } },
     },
     include: {
-      user: { select: { nom: true, prenom: true, telephone: true } },
+      user: { select: { nom: true, prenom: true, telephone: true, id: true } },
       specialites: true,
     },
     orderBy: [

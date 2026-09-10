@@ -29,13 +29,12 @@ export async function creerMission(req: AuthRequest, res: Response): Promise<voi
 
   if (missionActive) {
     if (['EN_ATTENTE', 'ACCEPTEE'].includes(missionActive.statut)) {
-      // Annuler l'ancienne mission
       await prisma.mission.update({
         where: { id: missionActive.id },
         data: { statut: 'ANNULEE', annuleeAt: new Date() },
       })
     } else {
-      res.status(400).json({ error: 'Vous avez déjà une mission en cours. Terminez-la avant d\'en créer une nouvelle.' })
+      res.status(400).json({ error: 'Vous avez déjà une mission en cours.' })
       return
     }
   }
@@ -61,23 +60,9 @@ export async function creerMission(req: AuthRequest, res: Response): Promise<voi
     },
   })
 
-  // Matching automatique pour missions immédiates
+  // Proposer à un praticien (sans assigner directement)
   if (type === 'IMMEDIATE') {
-    const praticien = await findBestPraticien({ specialite, latitude, longitude, urgence })
-
-    if (praticien) {
-      await prisma.mission.update({
-        where: { id: mission.id },
-        data: { praticienId: praticien.id, statut: 'ACCEPTEE', accepteeAt: new Date() },
-      })
-
-      await sendToUsers(
-        prisma, [praticien.userId],
-        '🔔 Nouvelle mission',
-        `${specialite} · ${adresseTexte}`,
-        { missionId: mission.id, type: 'MISSION_NOUVELLE' }
-      )
-    }
+    await proposerMission(mission.id, specialite, latitude, longitude, urgence, [])
   }
 
   const missionComplete = await prisma.mission.findUnique({
@@ -92,7 +77,149 @@ export async function creerMission(req: AuthRequest, res: Response): Promise<voi
   res.status(201).json(missionComplete)
 }
 
-// GET /api/missions — liste (admin) ou missions du patient connecté
+// Proposer la mission à un praticien disponible
+async function proposerMission(
+  missionId: string,
+  specialite: string,
+  latitude?: number,
+  longitude?: number,
+  urgence?: boolean,
+  excludeIds: string[] = []
+): Promise<void> {
+  const praticien = await findBestPraticien({ specialite, latitude, longitude, urgence, excludePraticienIds: excludeIds })
+console.log('[MATCHING] Praticien trouvé:', praticien?.id, praticien?.user?.nom)
+  console.log('[MATCHING] Options:', { specialite, excludeIds })
+  if (!praticien) {
+    // Aucun praticien disponible — laisser EN_ATTENTE, admin pourra assigner manuellement
+     console.log('[MATCHING] Aucun praticien disponible')
+    return
+  }
+
+  // Marquer le praticien comme "proposé" sur la mission
+  await prisma.mission.update({
+    where: { id: missionId },
+    data: {
+      praticienProposedId: praticien.id,
+      proposedAt: new Date(),
+    },
+  })
+
+  // Notifier le praticien
+  await sendToUsers(
+    prisma,
+    [praticien.user.id],
+    '🔔 Nouvelle mission disponible',
+    `${specialite} — Acceptez dans les 5 minutes`,
+    { missionId, type: 'MISSION_PROPOSEE' }
+  )
+
+  // Émettre en temps réel au praticien
+  emitToUser(praticien.user.id, 'mission:proposee', { missionId, specialite })
+
+  // Timeout de 5 minutes — si pas de réponse, proposer au suivant
+  setTimeout(async () => {
+    const missionActuelle = await prisma.mission.findUnique({ where: { id: missionId } })
+    if (missionActuelle?.statut === 'EN_ATTENTE' && missionActuelle.praticienProposedId === praticien.id) {
+      // Le praticien n'a pas répondu → proposer au suivant
+      await prisma.mission.update({
+        where: { id: missionId },
+        data: { praticienProposedId: null, proposedAt: null },
+      })
+      await proposerMission(missionId, specialite, latitude, longitude, urgence, [...excludeIds, praticien.id])
+    }
+  }, 5 * 60 * 1000) // 5 minutes
+}
+
+// POST /api/missions/:id/accepter — praticien accepte la mission
+export async function accepterMission(req: AuthRequest, res: Response): Promise<void> {
+  const { id } = req.params
+
+  const praticien = await prisma.praticien.findUnique({ where: { userId: req.user!.userId } })
+  if (!praticien) { res.status(404).json({ error: 'Praticien introuvable' }); return }
+
+  const mission = await prisma.mission.findUnique({ where: { id } })
+  if (!mission) { res.status(404).json({ error: 'Mission introuvable' }); return }
+
+  if (mission.praticienProposedId !== praticien.id) {
+    res.status(403).json({ error: 'Cette mission ne vous a pas été proposée' })
+    return
+  }
+
+  if (mission.statut !== 'EN_ATTENTE') {
+    res.status(400).json({ error: 'Mission déjà prise en charge' })
+    return
+  }
+
+  const missionAcceptee = await prisma.mission.update({
+    where: { id },
+    data: {
+      praticienId: praticien.id,
+      praticienProposedId: null,
+      proposedAt: null,
+      statut: 'ACCEPTEE',
+      accepteeAt: new Date(),
+    },
+    include: {
+      patient: { select: { nom: true, prenom: true, telephone: true } },
+      praticien: { include: { user: { select: { nom: true, prenom: true, telephone: true } } } },
+    },
+  })
+
+  // Mettre à jour le taux d'acceptation
+  const totalProposees = await prisma.mission.count({ where: { praticienId: praticien.id } })
+  const totalRefusees = praticien.missionsRefusees
+  const taux = totalProposees > 0 ? ((totalProposees - totalRefusees) / totalProposees) : 1
+  await prisma.praticien.update({ where: { id: praticien.id }, data: { tauxAcceptation: taux } })
+
+  // Notifier le patient
+  await sendToUsers(
+    prisma,
+    [mission.patientId],
+    '✅ Praticien trouvé !',
+    `${missionAcceptee.praticien?.user.prenom} ${missionAcceptee.praticien?.user.nom} prend en charge votre demande`,
+    { missionId: id, type: 'MISSION_ACCEPTEE' }
+  )
+
+  emitToMission(id, 'mission:statut', { missionId: id, statut: 'ACCEPTEE', updatedAt: new Date() })
+  emitToUser(mission.patientId, 'mission:update', { missionId: id, statut: 'ACCEPTEE' })
+
+  res.json(missionAcceptee)
+}
+
+// POST /api/missions/:id/refuser — praticien refuse la mission
+export async function refuserMission(req: AuthRequest, res: Response): Promise<void> {
+  const { id } = req.params
+
+  const praticien = await prisma.praticien.findUnique({ where: { userId: req.user!.userId } })
+  if (!praticien) { res.status(404).json({ error: 'Praticien introuvable' }); return }
+
+  const mission = await prisma.mission.findUnique({ where: { id } })
+  if (!mission) { res.status(404).json({ error: 'Mission introuvable' }); return }
+
+  if (mission.praticienProposedId !== praticien.id) {
+    res.status(403).json({ error: 'Cette mission ne vous a pas été proposée' })
+    return
+  }
+
+  // Incrémenter les refus du praticien
+  await prisma.praticien.update({
+    where: { id: praticien.id },
+    data: { missionsRefusees: { increment: 1 } },
+  })
+
+  // Retirer la proposition et chercher le suivant
+  await prisma.mission.update({
+    where: { id },
+    data: { praticienProposedId: null, proposedAt: null },
+  })
+
+  // Proposer au praticien suivant
+  await proposerMission(id, mission.specialite, mission.latitude ?? undefined, mission.longitude ?? undefined, mission.urgence, [praticien.id])
+
+  res.json({ message: 'Mission refusée, recherche d\'un autre praticien' })
+}
+
+// GET /api/missions — liste
 export async function listMissions(req: AuthRequest, res: Response): Promise<void> {
   const { statut, page = '1', limit = '20' } = req.query
   const skip = (parseInt(page as string) - 1) * parseInt(limit as string)
@@ -128,6 +255,25 @@ export async function listMissions(req: AuthRequest, res: Response): Promise<voi
   res.json({ missions, total, page: parseInt(page as string) })
 }
 
+// GET /api/missions/proposees — missions proposées au praticien connecté
+export async function getMissionsProposees(req: AuthRequest, res: Response): Promise<void> {
+  const praticien = await prisma.praticien.findUnique({ where: { userId: req.user!.userId } })
+  if (!praticien) { res.status(404).json({ error: 'Praticien introuvable' }); return }
+
+  const missions = await prisma.mission.findMany({
+    where: {
+      praticienProposedId: praticien.id,
+      statut: 'EN_ATTENTE',
+    },
+    include: {
+      patient: { select: { nom: true, prenom: true, telephone: true } },
+    },
+    orderBy: { proposedAt: 'asc' },
+  })
+
+  res.json({ missions })
+}
+
 // GET /api/missions/:id — détail
 export async function getMission(req: AuthRequest, res: Response): Promise<void> {
   const { id } = req.params
@@ -148,10 +294,7 @@ export async function getMission(req: AuthRequest, res: Response): Promise<void>
     },
   })
 
-  if (!mission) {
-    res.status(404).json({ error: 'Mission introuvable' })
-    return
-  }
+  if (!mission) { res.status(404).json({ error: 'Mission introuvable' }); return }
 
   res.json(mission)
 }
@@ -167,27 +310,24 @@ export async function updateStatutMission(req: AuthRequest, res: Response): Prom
     return
   }
 
+  const missionActuelle = await prisma.mission.findUnique({ where: { id } })
+  if (!missionActuelle) { res.status(404).json({ error: 'Mission introuvable' }); return }
+
+  if (req.user?.role === 'PATIENT') {
+    if (statut !== 'ANNULEE') { res.status(403).json({ error: 'Non autorisé' }); return }
+    if (!['EN_ATTENTE', 'ACCEPTEE'].includes(missionActuelle.statut)) {
+      res.status(400).json({ error: 'Impossible d\'annuler une mission déjà démarrée' }); return
+    }
+    if (missionActuelle.patientId !== req.user.userId) {
+      res.status(403).json({ error: 'Non autorisé' }); return
+    }
+  }
+
   const timestampField: Record<string, string> = {
     ACCEPTEE: 'accepteeAt', EN_ROUTE: 'enRouteAt', ARRIVE: 'arriveeAt',
     EN_COURS: 'debutSoinAt', TERMINEE: 'finSoinAt', ANNULEE: 'annuleeAt',
   }
 
-  // Vérifier les permissions selon le rôle
-const missionActuelle = await prisma.mission.findUnique({ where: { id } })
-if (!missionActuelle) { res.status(404).json({ error: 'Mission introuvable' }); return }
-
-if (req.user?.role === 'PATIENT') {
-  // Le patient ne peut qu'annuler, et seulement si EN_ATTENTE ou ACCEPTEE
-  if (statut !== 'ANNULEE') {
-    res.status(403).json({ error: 'Non autorisé' }); return
-  }
-  if (!['EN_ATTENTE', 'ACCEPTEE'].includes(missionActuelle.statut)) {
-    res.status(400).json({ error: 'Impossible d\'annuler une mission déjà démarrée' }); return
-  }
-  if (missionActuelle.patientId !== req.user.userId) {
-    res.status(403).json({ error: 'Non autorisé' }); return
-  }
-}
   const updateData: Record<string, unknown> = { statut }
   if (timestampField[statut]) updateData[timestampField[statut]] = new Date()
 
@@ -196,22 +336,18 @@ if (req.user?.role === 'PATIENT') {
     data: updateData,
     include: {
       patient: { select: { nom: true, prenom: true, telephone: true } },
-      praticien: {
-        include: { user: { select: { nom: true, prenom: true, telephone: true } } },
-      },
+      praticien: { include: { user: { select: { nom: true, prenom: true, telephone: true } } } },
     },
   })
 
-  // Émettre en temps réel
   emitToMission(id, 'mission:statut', { missionId: id, statut, updatedAt: new Date() })
   emitToUser(mission.patientId, 'mission:update', { missionId: id, statut })
 
-  // Notifier le patient
   const notifPatient: Record<string, { title: string; body: string }> = {
     EN_ROUTE: { title: '🚗 Votre praticien arrive', body: 'Votre soignant est en route vers vous' },
     ARRIVE: { title: '📍 Praticien arrivé', body: 'Votre soignant est devant chez vous' },
     EN_COURS: { title: '💉 Soin en cours', body: 'Le soin a commencé' },
-    TERMINEE: { title: '✅ Soin terminé', body: 'Pensez à laisser un avis !' },
+    TERMINEE: { title: '✅ Soin terminé', body: 'Pensez à effectuer le paiement !' },
     ANNULEE: { title: '❌ Mission annulée', body: 'Votre mission a été annulée' },
   }
   const notif = notifPatient[statut]
@@ -229,7 +365,7 @@ if (req.user?.role === 'PATIENT') {
   res.json(mission)
 }
 
-// PATCH /api/missions/:id/assigner — assigner manuellement un praticien (admin)
+// PATCH /api/missions/:id/assigner — assigner manuellement (admin)
 export async function assignerPraticien(req: AuthRequest, res: Response): Promise<void> {
   const { id } = req.params
   const { praticienId } = req.body
@@ -238,26 +374,24 @@ export async function assignerPraticien(req: AuthRequest, res: Response): Promis
 
   const praticien = await prisma.praticien.findUnique({ where: { id: praticienId } })
   if (!praticien || praticien.statutCompte !== 'VALIDE') {
-    res.status(400).json({ error: 'Praticien invalide ou non validé' })
-    return
+    res.status(400).json({ error: 'Praticien invalide ou non validé' }); return
   }
 
   const mission = await prisma.mission.update({
     where: { id },
-    data: { praticienId, statut: 'ACCEPTEE', accepteeAt: new Date() },
+    data: { praticienId, praticienProposedId: null, proposedAt: null, statut: 'ACCEPTEE', accepteeAt: new Date() },
   })
 
   res.json(mission)
 }
 
-// POST /api/missions/:id/compte-rendu — soumettre le compte rendu (praticien)
+// POST /api/missions/:id/compte-rendu
 export async function soumettreCompteRendu(req: AuthRequest, res: Response): Promise<void> {
   const { id } = req.params
   const { acteRealise, description, tension, temperature, pouls, spo2, recommandations, suiteNecessaire, photoUrls = [], signaturePatientUrl } = req.body
 
   if (!acteRealise || !description) {
-    res.status(400).json({ error: 'Acte réalisé et description obligatoires' })
-    return
+    res.status(400).json({ error: 'Acte réalisé et description obligatoires' }); return
   }
 
   const compteRendu = await prisma.compteRendu.upsert({
@@ -271,7 +405,7 @@ export async function soumettreCompteRendu(req: AuthRequest, res: Response): Pro
   res.status(201).json(compteRendu)
 }
 
-// POST /api/missions/:id/avis — noter une mission (patient)
+// POST /api/missions/:id/avis
 export async function noterMission(req: AuthRequest, res: Response): Promise<void> {
   const { id } = req.params
   const { note, commentaire, tags = [] } = req.body

@@ -9,6 +9,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
 import { getUser } from '@/lib/auth'
 import api from '@/lib/api'
+import { connectSocket } from '@/lib/socket'
+
 
 interface PraticienData {
   id: string
@@ -72,8 +74,30 @@ export default function PraticienDashboard() {
     }
   }
 
-  useFocusEffect(useCallback(() => { load() }, []))
-  const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
+useFocusEffect(useCallback(() => {
+  load()
+
+  let sock: Awaited<ReturnType<typeof connectSocket>> | null = null
+
+  async function initSocket() {
+    try {
+      sock = await connectSocket()
+      sock.on('mission:proposee', (data: { missionId: string }) => {
+        router.push({ pathname: '/(praticien)/nouvelle-mission', params: { missionId: data.missionId } } as never)
+      })
+    } catch (e) {
+      console.error('Socket error:', e)
+    }
+  }
+
+  initSocket()
+
+  return () => {
+    sock?.off('mission:proposee')
+  }
+}, []))
+
+const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
 
   async function toggleDisponibilite() {
     if (!praticien) return

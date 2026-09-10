@@ -3,10 +3,13 @@ import {
   creerMission,
   listMissions,
   getMission,
+  getMissionsProposees,
   updateStatutMission,
   assignerPraticien,
   soumettreCompteRendu,
   noterMission,
+  accepterMission,
+  refuserMission,
 } from '../controllers/mission.controller'
 import { authenticate, requireRole } from '../middlewares/auth.middleware'
 
@@ -17,6 +20,9 @@ router.post('/', authenticate, requireRole('PATIENT'), creerMission)
 router.post('/:id/avis', authenticate, requireRole('PATIENT'), noterMission)
 
 // Praticien
+router.get('/proposees', authenticate, requireRole('PRATICIEN'), getMissionsProposees)
+router.post('/:id/accepter', authenticate, requireRole('PRATICIEN'), accepterMission)
+router.post('/:id/refuser', authenticate, requireRole('PRATICIEN'), refuserMission)
 router.patch('/:id/statut', authenticate, requireRole('PRATICIEN', 'ADMIN', 'PATIENT'), updateStatutMission)
 router.post('/:id/compte-rendu', authenticate, requireRole('PRATICIEN'), soumettreCompteRendu)
 
