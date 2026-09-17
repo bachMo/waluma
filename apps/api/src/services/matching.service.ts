@@ -12,17 +12,33 @@ interface MatchingOptions {
 export async function findBestPraticien(options: MatchingOptions) {
   const { specialite, urgence = false, rayonKm = 10, excludePraticienIds = [] } = options
 
+  // Trouver les praticiens avec des missions terminées non payées
+const praticiensBloques = await prisma.$queryRaw<{ praticienId: string }[]>`
+  SELECT DISTINCT m."praticienId"
+  FROM missions m
+  LEFT JOIN paiements p ON p."missionId" = m.id
+  WHERE m.statut = 'TERMINEE'
+    AND m."praticienId" IS NOT NULL
+    AND (p.id IS NULL OR p.statut != 'PAYE')
+`
+
+const idsExclus = [
+  ...excludePraticienIds,
+  ...praticiensBloques.map(r => r.praticienId),
+]
+
   const praticiens = await prisma.praticien.findMany({
     where: {
       statutCompte: 'VALIDE',
       disponible: true,
-      id: excludePraticienIds.length > 0 ? { notIn: excludePraticienIds } : undefined,
+      bloque: false,
+      id: idsExclus.length > 0 ? { notIn: idsExclus } : undefined,
       specialites: urgence
         ? undefined
         : { some: { specialite: specialite as never } },
     },
     include: {
-      user: { select: { nom: true, prenom: true, telephone: true, id: true } },
+      user: { select: { id: true, nom: true, prenom: true, telephone: true } },
       specialites: true,
     },
     orderBy: [

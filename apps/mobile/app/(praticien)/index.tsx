@@ -58,21 +58,30 @@ export default function PraticienDashboard() {
   const [refreshing, setRefreshing] = useState(false)
 
   async function load() {
+  try {
+    const user = await getUser()
+    if (!user) { router.replace('/(auth)'); return }
+    setUserName(user.prenom)
+    const [praticienRes, missionsRes] = await Promise.all([
+      api.get('/praticiens/me'),
+      api.get('/missions?limit=10'),
+    ])
+    setPraticien(praticienRes.data)
+    setMissions(missionsRes.data.missions)
+
+    // Vérifier si une mission est proposée à ce praticien
     try {
-      const user = await getUser()
-      if (!user) { router.replace('/(auth)'); return }
-      setUserName(user.prenom)
-      const [praticienRes, missionsRes] = await Promise.all([
-        api.get('/praticiens/me'),
-        api.get('/missions?limit=10'),
-      ])
-      setPraticien(praticienRes.data)
-      setMissions(missionsRes.data.missions)
-    } catch {} finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
+      const { data: proposees } = await api.get('/missions/proposees')
+      if (proposees.missions.length > 0) {
+        router.push({ pathname: '/nouvelle-mission', params: { missionId: proposees.missions[0].id } } as never)
+      }
+    } catch {}
+
+  } catch {} finally {
+    setLoading(false)
+    setRefreshing(false)
   }
+}
 
 useFocusEffect(useCallback(() => {
   load()
@@ -83,8 +92,8 @@ useFocusEffect(useCallback(() => {
     try {
       sock = await connectSocket()
       sock.on('mission:proposee', (data: { missionId: string }) => {
-        router.push({ pathname: '/(praticien)/nouvelle-mission', params: { missionId: data.missionId } } as never)
-      })
+  router.push({ pathname: '/nouvelle-mission', params: { missionId: data.missionId } } as never)
+})
     } catch (e) {
       console.error('Socket error:', e)
     }

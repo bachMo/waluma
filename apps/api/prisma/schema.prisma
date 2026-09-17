@@ -153,6 +153,8 @@ model Praticien {
   zoneIntervention  String[]        // ex: ["Almadies", "Mermoz", "Plateau"]
   disponible        Boolean         @default(false)
   statutCompte      StatutPraticien @default(EN_ATTENTE)
+  bloque            Boolean         @default(false)
+  
 
   // Paiement
   operateurMM       OperateurMobileMoney?

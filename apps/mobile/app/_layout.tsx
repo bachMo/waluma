@@ -51,7 +51,7 @@ export default function RootLayout() {
       <Stack.Screen name="+not-found" />
       <Stack.Screen name="compte" />
 <Stack.Screen name="praticien-compte" />
-<Stack.Screen name="nouvelle-mission" options={{ presentation: 'modal' }} />
+<Stack.Screen name="nouvelle-mission" options={{ presentation: 'modal', headerShown: false }} />
     </Stack>
   )
 }

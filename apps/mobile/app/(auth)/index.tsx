@@ -28,8 +28,19 @@ export default function LoginScreen() {
       await api.post('/auth/otp/send', { telephone: telephone.replace(/\s/g, '') })
       setStep('otp')
     } catch (e: unknown) {
-      const err = e as { response?: { data?: { error?: string } } }
-      Alert.alert('Erreur', err?.response?.data?.error || 'Numéro introuvable')
+      const err = e as { response?: { data?: { error?: string; nouveauCompte?: boolean } } }
+      if (err?.response?.data?.nouveauCompte) {
+        Alert.alert(
+          'Compte introuvable',
+          'Ce numéro n\'a pas de compte Waluma. Souhaitez-vous en créer un ?',
+          [
+            { text: 'Annuler', style: 'cancel' },
+            { text: 'Créer un compte', onPress: () => router.push({ pathname: '/(auth)/register', params: { telephone: telephone.replace(/\s/g, '') } } as never) },
+          ]
+        )
+      } else {
+        Alert.alert('Erreur', err?.response?.data?.error || 'Une erreur est survenue')
+      }
     } finally {
       setLoading(false)
     }
@@ -47,10 +58,10 @@ export default function LoginScreen() {
       })
       await saveAuth(data.user, data.accessToken, data.refreshToken)
       if (data.user.role === 'PATIENT') {
-  router.replace('/(tabs)' as never)
-} else if (data.user.role === 'PRATICIEN') {
-  router.replace('/(praticien)' as never)
-}
+        router.replace('/(tabs)' as never)
+      } else if (data.user.role === 'PRATICIEN') {
+        router.replace('/(praticien)' as never)
+      }
     } catch {
       Alert.alert('Code incorrect', 'Le code est invalide ou expiré. Réessayez.')
     } finally {
@@ -61,16 +72,11 @@ export default function LoginScreen() {
   return (
     <View style={s.root}>
       <LinearGradient colors={['#0d5068', '#083d50', '#061e28']} style={s.bg}>
-        {/* Décorations */}
         <View style={[s.circle, s.circle1]} />
         <View style={[s.circle, s.circle2]} />
         <View style={[s.circle, s.circle3]} />
 
-        <KeyboardAvoidingView
-          style={s.kav}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          {/* Logo */}
+        <KeyboardAvoidingView style={s.kav} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
           <View style={s.logoWrap}>
             <View style={s.logoIcon}>
               <Ionicons name="heart-circle" size={40} color="#22c55e" />
@@ -82,7 +88,6 @@ export default function LoginScreen() {
             <Text style={s.logoSub}>Soins à domicile · Dakar</Text>
           </View>
 
-          {/* Card */}
           <View style={s.card}>
             {step === 'phone' ? (
               <>
@@ -117,6 +122,15 @@ export default function LoginScreen() {
                       <Ionicons name="arrow-forward" size={18} color="#fff" />
                     </>
                   }
+                </TouchableOpacity>
+
+                {/* Lien inscription */}
+                <TouchableOpacity
+                  style={s.switchLink}
+                  onPress={() => router.push('/(auth)/register' as never)}
+                >
+                  <Text style={s.switchText}>Pas encore de compte ? </Text>
+                  <Text style={s.switchTextBold}>S'inscrire</Text>
                 </TouchableOpacity>
               </>
             ) : (
@@ -190,43 +204,25 @@ const s = StyleSheet.create({
   logoW: { fontSize: 36, fontWeight: '800', color: '#fff', letterSpacing: -1 },
   logoAluma: { fontSize: 36, fontWeight: '800', color: '#4ade80', letterSpacing: -1 },
   logoSub: { fontSize: 13, color: 'rgba(255,255,255,0.45)', fontWeight: '500' },
-  card: {
-    backgroundColor: '#fff', borderRadius: 24, padding: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 20 },
-    shadowOpacity: 0.25, shadowRadius: 40, elevation: 16,
-  },
+  card: { backgroundColor: '#fff', borderRadius: 24, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 20 }, shadowOpacity: 0.25, shadowRadius: 40, elevation: 16 },
   cardTitle: { fontSize: 22, fontWeight: '800', color: '#1a1a18', letterSpacing: -0.5, marginBottom: 6 },
   cardSub: { fontSize: 13, color: '#888780', lineHeight: 18, marginBottom: 20 },
-  inputWrap: {
-    flexDirection: 'row', alignItems: 'center',
-    borderWidth: 1.5, borderColor: '#e5e4df', borderRadius: 14,
-    overflow: 'hidden', marginBottom: 14,
-  },
-  inputFlag: {
-    paddingHorizontal: 14, paddingVertical: 14,
-    backgroundColor: '#f5f4ef', borderRightWidth: 1, borderRightColor: '#e5e4df',
-  },
+  inputWrap: { flexDirection: 'row', alignItems: 'center', borderWidth: 1.5, borderColor: '#e5e4df', borderRadius: 14, overflow: 'hidden', marginBottom: 14 },
+  inputFlag: { paddingHorizontal: 14, paddingVertical: 14, backgroundColor: '#f5f4ef', borderRightWidth: 1, borderRightColor: '#e5e4df' },
   flagText: { fontSize: 20 },
   input: { flex: 1, paddingHorizontal: 14, fontSize: 17, color: '#1a1a18', fontWeight: '600' },
-  btn: {
-    backgroundColor: '#0d5068', borderRadius: 14, padding: 16,
-    alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8,
-  },
+  btn: { backgroundColor: '#0d5068', borderRadius: 14, padding: 16, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 },
   btnGreen: { backgroundColor: '#22c55e' },
   btnDisabled: { opacity: 0.6 },
   btnText: { color: '#fff', fontWeight: '700', fontSize: 16 },
   backRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 16 },
   backText: { fontSize: 13, color: '#5f5e5a', fontWeight: '600' },
-  otpInput: {
-    fontSize: 32, fontWeight: '800', textAlign: 'center', letterSpacing: 10,
-    color: '#1a1a18', borderWidth: 1.5, borderColor: '#e5e4df', borderRadius: 14,
-    padding: 16, marginBottom: 14,
-  },
+  otpInput: { fontSize: 32, fontWeight: '800', textAlign: 'center', letterSpacing: 10, color: '#1a1a18', borderWidth: 1.5, borderColor: '#e5e4df', borderRadius: 14, padding: 16, marginBottom: 14 },
   resendBtn: { alignItems: 'center', marginTop: 12 },
   resendText: { fontSize: 13, color: '#0d5068', fontWeight: '600' },
-  privacy: {
-    fontSize: 11, color: 'rgba(255,255,255,0.35)',
-    textAlign: 'center', marginTop: 20, lineHeight: 17,
-  },
+  switchLink: { flexDirection: 'row', justifyContent: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 0.5, borderTopColor: '#e5e4df' },
+  switchText: { fontSize: 13, color: '#888780' },
+  switchTextBold: { fontSize: 13, fontWeight: '700', color: '#0d5068' },
+  privacy: { fontSize: 11, color: 'rgba(255,255,255,0.35)', textAlign: 'center', marginTop: 20, lineHeight: 17 },
   privacyLink: { color: 'rgba(255,255,255,0.6)', textDecorationLine: 'underline' },
 })

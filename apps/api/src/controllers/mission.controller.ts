@@ -118,16 +118,36 @@ console.log('[MATCHING] Praticien trouvé:', praticien?.id, praticien?.user?.nom
 
   // Timeout de 5 minutes — si pas de réponse, proposer au suivant
   setTimeout(async () => {
-    const missionActuelle = await prisma.mission.findUnique({ where: { id: missionId } })
-    if (missionActuelle?.statut === 'EN_ATTENTE' && missionActuelle.praticienProposedId === praticien.id) {
-      // Le praticien n'a pas répondu → proposer au suivant
-      await prisma.mission.update({
-        where: { id: missionId },
-        data: { praticienProposedId: null, proposedAt: null },
-      })
-      await proposerMission(missionId, specialite, latitude, longitude, urgence, [...excludeIds, praticien.id])
-    }
-  }, 5 * 60 * 1000) // 5 minutes
+  const missionActuelle = await prisma.mission.findUnique({ where: { id: missionId } })
+  if (!missionActuelle || missionActuelle.statut !== 'EN_ATTENTE' || missionActuelle.praticienProposedId !== praticien.id) return
+
+  // Retirer la proposition
+  await prisma.mission.update({
+    where: { id: missionId },
+    data: { praticienProposedId: null, proposedAt: null },
+  })
+
+  // Chercher le prochain praticien
+  const suivant = await findBestPraticien({ specialite, latitude, longitude, urgence, excludePraticienIds: [...excludeIds, praticien.id] })
+
+  if (!suivant) {
+    // Aucun praticien dispo → annuler et notifier le patient
+    const missionAnnulee = await prisma.mission.update({
+      where: { id: missionId },
+      data: { statut: 'ANNULEE', annuleeAt: new Date() },
+    })
+    emitToUser(missionAnnulee.patientId, 'mission:update', { missionId, statut: 'ANNULEE' })
+    emitToMission(missionId, 'mission:statut', { missionId, statut: 'ANNULEE', updatedAt: new Date() })
+    await sendToUsers(
+      prisma, [missionAnnulee.patientId],
+      '❌ Aucun praticien disponible',
+      'Aucun praticien n\'a pu prendre en charge votre demande.',
+      { missionId, type: 'MISSION_ANNULEE' }
+    )
+  } else {
+    await proposerMission(missionId, specialite, latitude, longitude, urgence, [...excludeIds, praticien.id])
+  }
+}, 5 * 60 * 1000) // 5 minutes
 }
 
 // POST /api/missions/:id/accepter — praticien accepte la mission
