@@ -40,7 +40,7 @@ const SPEC_LABEL: Record<string, string> = {
 }
 
 function getStatutKey(m: Mission): string {
-  if (m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE') return 'TERMINEE_IMPAYEE'
+  if (m.statut === 'TERMINEE' && m.paiements?.[0]?.statut !== 'PAYE') return 'TERMINEE_IMPAYEE'
   return m.statut
 }
 
@@ -65,12 +65,12 @@ const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
   // Une mission TERMINEE non payée reste dans "En cours" côté patient
   const actives = missions.filter(m =>
     !['ANNULEE', 'EXPIREE'].includes(m.statut) &&
-    !(m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE')
+    !(m.statut === 'TERMINEE' && m.paiements?.[0]?.statut === 'PAYE')
   )
   const passees = missions.filter(m =>
     m.statut === 'ANNULEE' ||
     m.statut === 'EXPIREE' ||
-    (m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE')
+    (m.statut === 'TERMINEE' && m.paiements?.[0]?.statut === 'PAYE')
   )
 
   return (

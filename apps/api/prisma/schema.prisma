@@ -105,6 +105,11 @@ enum CanalNotification {
   EMAIL
 }
 
+enum TypePaiement {
+  PATIENT
+  COMMISSION_PRATICIEN
+}
+
 // ─────────────────────────────────────────
 // UTILISATEURS
 // ─────────────────────────────────────────
@@ -287,7 +292,7 @@ model Mission {
 
   // Relations
   compteRendu   CompteRendu?
-  paiement      Paiement?
+  paiements    Paiement[]  
   avis          Avis?
   litige        Litige?
 
@@ -331,27 +336,24 @@ model CompteRendu {
 // ─────────────────────────────────────────
 
 model Paiement {
-  id            String               @id @default(cuid())
-  missionId     String               @unique
-  mission       Mission              @relation(fields: [missionId], references: [id])
-  userId        String
-  user          User                 @relation(fields: [userId], references: [id])
-  numeroMM  String?
-  montant       Float
-  operateur     OperateurMobileMoney
-  numeroPayeur  String
-  statut        StatutPaiement       @default(EN_ATTENTE)
-
-  // Référence transaction opérateur
+  id               String               @id @default(cuid())
+  missionId        String               // ← retirer @unique
+  mission          Mission              @relation(fields: [missionId], references: [id])
+  userId           String
+  user             User                 @relation(fields: [userId], references: [id])
+  type             TypePaiement         @default(PATIENT)  // ← ajouter
+  numeroMM         String?
+  montant          Float
+  operateur        OperateurMobileMoney
+  numeroPayeur     String
+  statut           StatutPaiement       @default(EN_ATTENTE)
   referenceExterne String?
-  // Virement praticien
-  virementEffectue Boolean           @default(false)
-  virementAt      DateTime?
-  montantVirement Float?             // montant net après commission
-
-  payeAt          DateTime?
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  virementEffectue Boolean              @default(false)
+  virementAt       DateTime?
+  montantVirement  Float?
+  payeAt           DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
   @@map("paiements")
 }

@@ -53,9 +53,9 @@ export default function MissionsHistoriqueScreen() {
   useEffect(() => { load() }, [])
   const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
 
-  const termineesPaye = missions.filter(m => m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE').length
+  const termineesPaye = missions.filter(m => m.statut === 'TERMINEE' && m.paiements?.[0]?.statut === 'PAYE').length
   const gainTotal = Math.round(missions
-    .filter(m => m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE')
+    .filter(m => m.statut === 'TERMINEE' && m.paiements?.[0]?.statut === 'PAYE')
     .reduce((sum, m) => sum + m.montantTotal * 0.9, 0))
 
   return (
@@ -97,7 +97,7 @@ export default function MissionsHistoriqueScreen() {
         >
           <View style={s.list}>
             {missions.map(m => {
-              const statutKey = m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE'
+              const statutKey = m.statut === 'TERMINEE' && m.paiements?.[0]?.statut !== 'PAYE'
                 ? 'TERMINEE_IMPAYEE'
                 : m.statut
               const config = STATUT_CONFIG[statutKey] ?? STATUT_CONFIG.EN_ATTENTE
@@ -122,7 +122,7 @@ export default function MissionsHistoriqueScreen() {
                     <View style={[s.statutBadge, { backgroundColor: config.bg }]}>
                       <Text style={[s.statutText, { color: config.color }]}>{config.label}</Text>
                     </View>
-                    {m.statut === 'TERMINEE' && m.paiement?.statut === 'PAYE' && (
+                    {m.statut === 'TERMINEE' && m.paiements?.[0]?.statut === 'PAYE' && (
                       <Text style={s.gainText}>+{Math.round(m.montantTotal * 0.9).toLocaleString()} F</Text>
                     )}
                   </View>

@@ -263,7 +263,7 @@ export async function listMissions(req: AuthRequest, res: Response): Promise<voi
         praticien: {
           include: { user: { select: { nom: true, prenom: true, telephone: true } } },
         },
-        paiement: { select: { statut: true } },
+        paiements: { select: { statut: true } },
       },
       skip,
       take: parseInt(limit as string),
@@ -309,7 +309,7 @@ export async function getMission(req: AuthRequest, res: Response): Promise<void>
         },
       },
       compteRendu: true,
-      paiement: true,
+      paiements: true,
       avis: true,
     },
   })

@@ -66,7 +66,7 @@ export default function HomeScreen() {
         const { data } = await api.get('/missions?limit=10')
         const active = data.missions.find((m: { statut: string; paiement?: { statut: string } | null }) =>
   ['EN_ATTENTE', 'ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'].includes(m.statut) ||
-  (m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE')
+  (m.statut === 'TERMINEE' && m.paiements?.[0]?.statut !== 'PAYE')
 )
         setMissionActive(active ?? null)
       } catch {}

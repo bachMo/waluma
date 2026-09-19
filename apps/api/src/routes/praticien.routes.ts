@@ -14,6 +14,7 @@ import { creerPraticien } from '../controllers/praticien.controller'
 import { updateInfosPraticien } from '../controllers/praticien.controller'
 import { getMonProfil } from '../controllers/praticien.controller'
 import { deletePraticien } from '../controllers/praticien.controller'
+import { prisma } from "../prisma/client";
 
 const router = Router();
 
@@ -32,5 +33,15 @@ router.get('/me', authenticate, requireRole('PRATICIEN'), getMonProfil)
 // Commun (admin + praticien)
 router.get("/:id", authenticate, getPraticien);
 router.delete('/:id', authenticate, requireRole('ADMIN'), deletePraticien)
+router.patch('/:id/bloquer', authenticate, requireRole('ADMIN'), async (req, res) => {
+  const { id } = req.params
+  const { bloque } = req.body
+  if (typeof bloque !== 'boolean') { res.status(400).json({ error: 'bloque requis (boolean)' }); return }
+  const praticien = await prisma.praticien.update({
+    where: { id },
+    data: { bloque },
+  })
+  res.json(praticien)
+})
 
 export default router;

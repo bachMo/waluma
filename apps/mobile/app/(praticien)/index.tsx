@@ -1,7 +1,7 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, StatusBar, Switch,
-  ActivityIndicator, Alert, RefreshControl
+  ActivityIndicator, Alert, RefreshControl, Linking
 } from 'react-native'
 import { router, useFocusEffect } from 'expo-router'
 import { useState, useCallback } from 'react'
@@ -11,14 +11,15 @@ import { getUser } from '@/lib/auth'
 import api from '@/lib/api'
 import { connectSocket } from '@/lib/socket'
 
-
 interface PraticienData {
   id: string
   disponible: boolean
+  bloque: boolean
   statutCompte: string
   totalMissions: number
   noteMoyenne: number | null
   specialites: { specialite: string; principale: boolean }[]
+  nbMissionsImpayees: number
 }
 
 interface Mission {
@@ -49,6 +50,9 @@ const STATUT_BADGE: Record<string, { color: string; bg: string; label: string }>
   ANNULEE: { color: '#dc2626', bg: '#fee2e2', label: 'Annulée' },
 }
 
+// Email de contact admin
+const ADMIN_EMAIL = 'support@waluma.sn'
+
 export default function PraticienDashboard() {
   const [userName, setUserName] = useState('')
   const [praticien, setPraticien] = useState<PraticienData | null>(null)
@@ -58,55 +62,54 @@ export default function PraticienDashboard() {
   const [refreshing, setRefreshing] = useState(false)
 
   async function load() {
-  try {
-    const user = await getUser()
-    if (!user) { router.replace('/(auth)'); return }
-    setUserName(user.prenom)
-    const [praticienRes, missionsRes] = await Promise.all([
-      api.get('/praticiens/me'),
-      api.get('/missions?limit=10'),
-    ])
-    setPraticien(praticienRes.data)
-    setMissions(missionsRes.data.missions)
-
-    // Vérifier si une mission est proposée à ce praticien
     try {
-      const { data: proposees } = await api.get('/missions/proposees')
-      if (proposees.missions.length > 0) {
-        router.push({ pathname: '/nouvelle-mission', params: { missionId: proposees.missions[0].id } } as never)
-      }
-    } catch {}
+      const user = await getUser()
+      if (!user) { router.replace('/(auth)'); return }
+      setUserName(user.prenom)
+      const [praticienRes, missionsRes] = await Promise.all([
+        api.get('/praticiens/me'),
+        api.get('/missions?limit=10'),
+      ])
+      setPraticien(praticienRes.data)
+      setMissions(missionsRes.data.missions)
 
-  } catch {} finally {
-    setLoading(false)
-    setRefreshing(false)
-  }
-}
-
-useFocusEffect(useCallback(() => {
-  load()
-
-  let sock: Awaited<ReturnType<typeof connectSocket>> | null = null
-
-  async function initSocket() {
-    try {
-      sock = await connectSocket()
-      sock.on('mission:proposee', (data: { missionId: string }) => {
-  router.push({ pathname: '/nouvelle-mission', params: { missionId: data.missionId } } as never)
-})
-    } catch (e) {
-      console.error('Socket error:', e)
+      // Vérifier si une mission est proposée à ce praticien
+      try {
+        const { data: proposees } = await api.get('/missions/proposees')
+        if (proposees.missions.length > 0) {
+          router.push({ pathname: '/nouvelle-mission', params: { missionId: proposees.missions[0].id } } as never)
+        }
+      } catch {}
+    } catch {} finally {
+      setLoading(false)
+      setRefreshing(false)
     }
   }
 
-  initSocket()
+  useFocusEffect(useCallback(() => {
+    load()
 
-  return () => {
-    sock?.off('mission:proposee')
-  }
-}, []))
+    let sock: Awaited<ReturnType<typeof connectSocket>> | null = null
 
-const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
+    async function initSocket() {
+      try {
+        sock = await connectSocket()
+        sock.on('mission:proposee', (data: { missionId: string }) => {
+          router.push({ pathname: '/nouvelle-mission', params: { missionId: data.missionId } } as never)
+        })
+      } catch (e) {
+        console.error('Socket error:', e)
+      }
+    }
+
+    initSocket()
+
+    return () => {
+      sock?.off('mission:proposee')
+    }
+  }, []))
+
+  const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
 
   async function toggleDisponibilite() {
     if (!praticien) return
@@ -123,7 +126,16 @@ const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
     }
   }
 
+  function contacterAdmin(sujet: string) {
+    const body = `Bonjour,\n\nJe souhaite contacter l'administration concernant mon compte Waluma.\n\nSujet : ${sujet}\n\nNom : ${userName}\nIdentifiant praticien : ${praticien?.id ?? ''}`
+    Linking.openURL(`mailto:${ADMIN_EMAIL}?subject=${encodeURIComponent(sujet)}&body=${encodeURIComponent(body)}`)
+  }
+
   const missionActive = missions.find(m => ['ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'].includes(m.statut))
+
+  // Déterminer le type de blocage
+  const estBloqueAdmin = praticien?.bloque === true
+  const estBloqueImpayees = !estBloqueAdmin && (praticien?.nbMissionsImpayees ?? 0) > 0
 
   return (
     <View style={s.root}>
@@ -145,26 +157,74 @@ const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
                 <Ionicons name="person-outline" size={20} color="rgba(255,255,255,0.8)" />
               </TouchableOpacity>
             </View>
-            <View style={[s.disponCard, praticien?.disponible && s.disponCardOn]}>
-              <View style={s.disponLeft}>
-                <View style={[s.disponDot, praticien?.disponible && s.disponDotOn]} />
-                <View>
-                  <Text style={s.disponTitle}>{praticien?.disponible ? 'Disponible' : 'Indisponible'}</Text>
-                  <Text style={s.disponSub}>
-                    {praticien?.disponible ? 'Vous recevrez des demandes de soin' : 'Activez pour recevoir des missions'}
+
+            {/* Bloc disponibilité ou alerte blocage */}
+            {estBloqueAdmin ? (
+              <View style={s.alerteCard}>
+                <View style={s.alerteIcon}>
+                  <Ionicons name="lock-closed" size={20} color="#dc2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.alerteTitre}>Compte bloqué</Text>
+                  <Text style={s.alerteSub}>
+                    Votre compte a été bloqué par l'administration. Vous ne pouvez pas recevoir de missions.
                   </Text>
+                  <TouchableOpacity
+                    style={s.alerteBtn}
+                    onPress={() => contacterAdmin('Demande de déblocage de compte')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="mail-outline" size={13} color="#fff" />
+                    <Text style={s.alerteBtnText}>Contacter l'administration</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-              {toggling
-                ? <ActivityIndicator color={praticien?.disponible ? '#22c55e' : '#888780'} />
-                : <Switch value={praticien?.disponible ?? false} onValueChange={toggleDisponibilite} trackColor={{ false: 'rgba(255,255,255,0.15)', true: '#22c55e' }} thumbColor="#fff" />
-              }
-            </View>
+            ) : estBloqueImpayees ? (
+              <View style={[s.alerteCard, s.alerteCardOrange]}>
+                <View style={[s.alerteIcon, s.alerteIconOrange]}>
+                  <Ionicons name="card-outline" size={20} color="#d97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.alerteTitre, { color: '#fef3c7' }]}>Paiements en attente</Text>
+                  <Text style={[s.alerteSub, { color: 'rgba(254,243,199,0.8)' }]}>
+                    {praticien!.nbMissionsImpayees} mission{praticien!.nbMissionsImpayees > 1 ? 's' : ''} non payée{praticien!.nbMissionsImpayees > 1 ? 's' : ''}. Vous ne pouvez pas recevoir de nouvelles missions tant que vos patients n'ont pas réglé.
+                  </Text>
+                  <TouchableOpacity
+                    style={[s.alerteBtn, s.alerteBtnOrange]}
+                    onPress={() => contacterAdmin('Litige paiement — missions impayées')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="flag-outline" size={13} color="#fff" />
+                    <Text style={s.alerteBtnText}>Signaler un litige</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <View style={[s.disponCard, praticien?.disponible && s.disponCardOn]}>
+                <View style={s.disponLeft}>
+                  <View style={[s.disponDot, praticien?.disponible && s.disponDotOn]} />
+                  <View>
+                    <Text style={s.disponTitle}>{praticien?.disponible ? 'Disponible' : 'Indisponible'}</Text>
+                    <Text style={s.disponSub}>
+                      {praticien?.disponible ? 'Vous recevrez des demandes de soin' : 'Activez pour recevoir des missions'}
+                    </Text>
+                  </View>
+                </View>
+                {toggling
+                  ? <ActivityIndicator color={praticien?.disponible ? '#22c55e' : '#888780'} />
+                  : <Switch value={praticien?.disponible ?? false} onValueChange={toggleDisponibilite} trackColor={{ false: 'rgba(255,255,255,0.15)', true: '#22c55e' }} thumbColor="#fff" />
+                }
+              </View>
+            )}
           </View>
         </SafeAreaView>
       </LinearGradient>
 
-      <ScrollView style={s.body} showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d5068" />}>
+      <ScrollView
+        style={s.body}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#0d5068" />}
+      >
         {missionActive && (
           <TouchableOpacity style={s.activeMission} onPress={() => router.push({ pathname: '/(praticien)/mission', params: { missionId: missionActive.id } })} activeOpacity={0.88}>
             <LinearGradient colors={['#22c55e', '#16a34a']} style={s.activeMissionGrad}>
@@ -207,7 +267,7 @@ const onRefresh = useCallback(() => { setRefreshing(true); load() }, [])
             </View>
           ) : (
             missions.slice(0, 5).map(m => {
-              const statutKey = m.statut === 'TERMINEE' && m.paiement?.statut !== 'PAYE'
+              const statutKey = m.statut === 'TERMINEE' && m.paiements?.[0]?.statut !== 'PAYE'
                 ? 'TERMINEE_IMPAYEE'
                 : m.statut
               const badge = STATUT_BADGE[statutKey]
@@ -253,6 +313,7 @@ const s = StyleSheet.create({
   headerName: { fontSize: 22, fontWeight: '800', color: '#fff', letterSpacing: -0.5 },
   headerSpec: { fontSize: 12, color: 'rgba(255,255,255,0.45)', marginTop: 2 },
   notifBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center', justifyContent: 'center' },
+  // Toggle disponibilité
   disponCard: { backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   disponCardOn: { backgroundColor: 'rgba(34,197,94,0.15)' },
   disponLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
@@ -260,6 +321,17 @@ const s = StyleSheet.create({
   disponDotOn: { backgroundColor: '#22c55e' },
   disponTitle: { fontSize: 15, fontWeight: '700', color: '#fff', marginBottom: 2 },
   disponSub: { fontSize: 11, color: 'rgba(255,255,255,0.45)', lineHeight: 15 },
+  // Alertes blocage
+  alerteCard: { backgroundColor: 'rgba(220,38,38,0.15)', borderRadius: 16, padding: 14, flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderColor: 'rgba(220,38,38,0.3)' },
+  alerteCardOrange: { backgroundColor: 'rgba(217,119,6,0.15)', borderColor: 'rgba(217,119,6,0.3)' },
+  alerteIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: 'rgba(220,38,38,0.2)', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  alerteIconOrange: { backgroundColor: 'rgba(217,119,6,0.2)' },
+  alerteTitre: { fontSize: 14, fontWeight: '700', color: '#fff', marginBottom: 4 },
+  alerteSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 17, marginBottom: 10 },
+  alerteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(220,38,38,0.4)', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, alignSelf: 'flex-start' },
+  alerteBtnOrange: { backgroundColor: 'rgba(217,119,6,0.4)' },
+  alerteBtnText: { fontSize: 12, fontWeight: '700', color: '#fff' },
+  // Body
   body: { flex: 1 },
   activeMission: { margin: 16, marginBottom: 0, borderRadius: 18, overflow: 'hidden' },
   activeMissionGrad: { padding: 18 },

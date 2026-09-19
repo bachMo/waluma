@@ -358,27 +358,38 @@ export async function updateInfosPraticien(req: Request, res: Response): Promise
 // GET /api/praticiens/me — praticien connecté
 export async function getMonProfil(req: AuthRequest, res: Response): Promise<void> {
   const praticien = await prisma.praticien.findUnique({
-  where: { userId: req.user!.userId },
-  include: {
-    user: { select: { nom: true, prenom: true, telephone: true } },
-    specialites: true,
-    documents: true,
-    missions: { where: { statut: 'TERMINEE' }, select: { id: true } },
-  },
-})
-
-if (praticien) {
-  // Recalculer totalMissions depuis la BD
-  await prisma.praticien.update({
-    where: { id: praticien.id },
-    data: { totalMissions: praticien.missions.length },
+    where: { userId: req.user!.userId },
+    include: {
+      user: { select: { nom: true, prenom: true, telephone: true } },
+      specialites: true,
+      documents: true,
+      missions: { where: { statut: 'TERMINEE' }, select: { id: true } },
+    },
   })
-}
+
   if (!praticien) {
     res.status(404).json({ error: 'Praticien introuvable' })
     return
   }
-  res.json(praticien)
+
+  // Recalculer totalMissions
+  await prisma.praticien.update({
+    where: { id: praticien.id },
+    data: { totalMissions: praticien.missions.length },
+  })
+
+  // Vérifier missions impayées
+  const missionsImpayees = await prisma.$queryRaw<{ count: bigint }[]>`
+    SELECT COUNT(*) as count
+    FROM missions m
+    LEFT JOIN paiements p ON p."missionId" = m.id
+    WHERE m."praticienId" = ${praticien.id}
+      AND m.statut = 'TERMINEE'
+      AND (p.id IS NULL OR p.statut != 'PAYE')
+  `
+  const nbImpayees = Number(missionsImpayees[0]?.count ?? 0)
+
+  res.json({ ...praticien, nbMissionsImpayees: nbImpayees })
 }
 
 // DELETE /api/praticiens/:id — supprimer un praticien (admin)

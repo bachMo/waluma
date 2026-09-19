@@ -25,10 +25,7 @@ export async function listLitiges(req: Request, res: Response): Promise<void> {
       },
       skip,
       take: parseInt(limit as string),
-      orderBy: [
-        { statut: 'asc' },
-        { ouvertAt: 'desc' },
-      ],
+      orderBy: [{ statut: 'asc' }, { ouvertAt: 'desc' }],
     }),
     prisma.litige.count({ where }),
   ])
@@ -50,7 +47,7 @@ export async function getLitige(req: Request, res: Response): Promise<void> {
             include: { user: { select: { nom: true, prenom: true, telephone: true } } },
           },
           compteRendu: true,
-          paiement: true,
+          paiements: true, // ← liste
         },
       },
     },
@@ -116,9 +113,7 @@ export async function updateLitige(req: AuthRequest, res: Response): Promise<voi
   const updateData: Record<string, unknown> = {}
   if (statut) updateData.statut = statut
   if (resolution) updateData.resolution = resolution
-  if (statut === 'RESOLU' || statut === 'CLOS') {
-    updateData.resoluAt = new Date()
-  }
+  if (statut === 'RESOLU' || statut === 'CLOS') updateData.resoluAt = new Date()
 
   const litige = await prisma.litige.update({
     where: { id },
@@ -152,11 +147,10 @@ export async function forcerCloture(req: AuthRequest, res: Response): Promise<vo
     },
   })
 
-  // Terminer la mission associée si pas déjà terminée
   await prisma.mission.update({
     where: { id: litige.missionId },
     data: { statut: 'TERMINEE', finSoinAt: new Date() },
-  }).catch(() => {}) // Ignorer si déjà terminée
+  }).catch(() => {})
 
   res.json({ message: 'Litige clôturé', litige })
 }
@@ -167,7 +161,7 @@ export async function rembourserPatient(req: AuthRequest, res: Response): Promis
 
   const litige = await prisma.litige.findUnique({
     where: { id },
-    include: { mission: { include: { paiement: true } } },
+    include: { mission: { include: { paiements: true } } }, // ← liste
   })
 
   if (!litige) {
@@ -175,23 +169,19 @@ export async function rembourserPatient(req: AuthRequest, res: Response): Promis
     return
   }
 
-  if (litige.mission.paiement) {
+  // Trouver le paiement patient
+  const paiementPatient = litige.mission.paiements.find(p => p.type === 'PATIENT')
+  if (paiementPatient) {
     await prisma.paiement.update({
-      where: { id: litige.mission.paiement.id },
+      where: { id: paiementPatient.id },
       data: { statut: 'REMBOURSE' },
     })
   }
 
   await prisma.litige.update({
     where: { id },
-    data: {
-      statut: 'RESOLU',
-      resolution: 'Patient remboursé',
-      resoluAt: new Date(),
-    },
+    data: { statut: 'RESOLU', resolution: 'Patient remboursé', resoluAt: new Date() },
   })
-
-  // TODO: déclencher le vrai remboursement via Mobile Money
 
   res.json({ message: 'Remboursement effectué' })
 }

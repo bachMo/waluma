@@ -17,7 +17,7 @@ const router = Router()
 
 // Patient
 router.post('/', authenticate, requireRole('PATIENT'), creerMission)
-router.post('/:id/avis', authenticate, requireRole('PATIENT'), noterMission)
+router.post('/:id/avis', authenticate, requireRole('PATIENT', 'PRATICIEN'), noterMission)
 
 // Praticien
 router.get('/proposees', authenticate, requireRole('PRATICIEN'), getMissionsProposees)
