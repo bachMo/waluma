@@ -15,6 +15,7 @@ import { updateInfosPraticien } from '../controllers/praticien.controller'
 import { getMonProfil } from '../controllers/praticien.controller'
 import { deletePraticien } from '../controllers/praticien.controller'
 import { prisma } from "../prisma/client";
+import { uploadFile } from '../services/r2.service'
 
 const router = Router();
 
@@ -42,6 +43,92 @@ router.patch('/:id/bloquer', authenticate, requireRole('ADMIN'), async (req, res
     data: { bloque },
   })
   res.json(praticien)
+})
+
+// À ajouter dans apps/api/src/routes/praticien.routes.ts
+// Route PUBLIQUE — sans authenticate — pour les candidatures depuis la landing
+
+
+
+router.post('/creer-demande', upload.array('files', 3), async (req, res) => {
+  const {
+    prenom, nom, telephone, specialite,
+    anneesExperience, bio, zoneIntervention,
+    numeroOrdre, operateur, numeroMM,
+  } = req.body
+
+  // Validation
+  if (!prenom || !nom || !telephone || !specialite || !anneesExperience || !bio) {
+    res.status(400).json({ error: 'Champs obligatoires manquants' })
+    return
+  }
+
+  const telRegex = /^\+221(70|75|76|77|78)\d{7}$/
+  if (!telRegex.test(telephone.replace(/\s/g, ''))) {
+    res.status(400).json({ error: 'Format téléphone invalide' })
+    return
+  }
+
+  const existing = await prisma.user.findUnique({ where: { telephone: telephone.replace(/\s/g, '') } })
+  if (existing) {
+    res.status(400).json({ error: 'Un compte avec ce numéro existe déjà' })
+    return
+  }
+
+  const files = req.files as Express.Multer.File[]
+  if (!files || files.length < 3) {
+    res.status(400).json({ error: '3 documents requis (diplôme, CNI, casier judiciaire)' })
+    return
+  }
+
+  let parsedZone: string[] = []
+  try {
+    parsedZone = typeof zoneIntervention === 'string' ? JSON.parse(zoneIntervention) : zoneIntervention
+  } catch {
+    parsedZone = []
+  }
+
+  const DOC_TYPES = ['DIPLOME', 'CNI', 'CASIER_JUDICIAIRE'] as const
+
+  const user = await prisma.user.create({
+    data: {
+      telephone: telephone.replace(/\s/g, ''),
+      nom,
+      prenom,
+      role: 'PRATICIEN',
+      praticien: {
+        create: {
+          numeroOrdre: numeroOrdre || null,
+          anneesExperience: parseInt(anneesExperience) || 0,
+          bio,
+          zoneIntervention: parsedZone,
+          statutCompte: 'EN_ATTENTE',
+          disponible: false,
+          commission: 10,
+          operateurMM: operateur as never || 'WAVE',
+          numeroMM: numeroMM?.replace(/\s/g, '') || null,
+          specialites: {
+            create: [{ specialite, principale: true }],
+          },
+        },
+      },
+    },
+    include: { praticien: true },
+  })
+
+  const praticienId = user.praticien!.id
+
+  // Upload des 3 documents
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    const docType = DOC_TYPES[i] || 'AUTRE'
+    const url = await uploadFile(file.buffer, file.originalname, file.mimetype, `praticiens/${praticienId}/documents`)
+    await prisma.document.create({
+      data: { praticienId, type: docType, url, nom: file.originalname, statut: 'EN_ATTENTE' },
+    })
+  }
+
+  res.status(201).json({ message: 'Candidature reçue. Votre dossier sera examiné sous 48-72h.' })
 })
 
 export default router;

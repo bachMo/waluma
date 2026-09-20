@@ -68,7 +68,7 @@ export default function Sidebar() {
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+      <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto scrollbar-hide">
         <p className="text-[9px] font-bold uppercase tracking-widest text-white/30 px-2 mb-2">Principal</p>
         {navItems.slice(0, 4).map(item => {
           const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
