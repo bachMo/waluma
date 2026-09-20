@@ -17,6 +17,9 @@ export const metadata: Metadata = {
     locale: 'fr_SN',
     type: 'website',
   },
+  icons: {
+  icon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 85S15 63 15 40a22 22 0 0135-17.5A22 22 0 0185 40c0 23-35 45-35 45z' fill='%2322c55e'/></svg>",
+},
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
