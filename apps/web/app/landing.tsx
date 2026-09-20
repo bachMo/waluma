@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Waluma — Votre santé, à domicile. En quelques minutes.',
-  description: 'Waluma connecte patients et professionnels de santé à Dakar pour des soins à domicile rapides et fiables.',
+  description: 'Waluma connecte patients et professionnels de santé à Dakar pour des soins à domicile rapides et fiables. Infirmiers, médecins, sages-femmes disponibles près de chez vous.',
 }
 
 const SPECIALITES = [
@@ -18,12 +18,12 @@ const SPECIALITES = [
 const ETAPES = [
   { num: '01', titre: 'Choisissez votre soin', desc: 'Sélectionnez le type de soin dont vous avez besoin parmi notre liste de spécialités.' },
   { num: '02', titre: 'Un praticien vous est assigné', desc: 'Notre système trouve automatiquement le meilleur professionnel disponible près de chez vous.' },
-  { num: '03', titre: 'Suivi en temps réel', desc: "Suivez l'arrivée de votre praticien sur la carte et restez informé à chaque étape." },
-  { num: '04', titre: 'Payez en toute sécurité', desc: 'Réglez via Wave, Orange Money ou Free Money directement depuis application.' },
+  { num: '03', titre: 'Suivi en temps réel', desc: 'Suivez l\'arrivée de votre praticien sur la carte et restez informé à chaque étape.' },
+  { num: '04', titre: 'Payez en toute sécurité', desc: 'Réglez via Wave, Orange Money ou Free Money directement depuis l\'application.' },
 ]
 
 const VALEURS = [
-  { icon: '🛡️', titre: 'Praticiens vérifiés', desc: "Tous nos professionnels de santé sont diplômés et vérifiés par notre équipe avant d'être acceptés sur la plateforme." },
+  { icon: '🛡️', titre: 'Praticiens vérifiés', desc: 'Tous nos professionnels de santé sont diplômés et vérifiés par notre équipe avant d\'être acceptés sur la plateforme.' },
   { icon: '⚡', titre: 'Réponse rapide', desc: 'En moins de 30 minutes, un praticien qualifié est chez vous. Disponible 7j/7 pour les soins urgents.' },
   { icon: '📋', titre: 'Compte rendu médical', desc: 'À la fin de chaque soin, un compte rendu détaillé est généré et archivé dans votre dossier médical numérique.' },
   { icon: '💳', titre: 'Paiement sécurisé', desc: 'Payez via Mobile Money (Wave, Orange, Free) après le soin. Aucun paiement en avance requis.' },
@@ -33,7 +33,7 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-white font-sans">
 
-      {/* NAVBAR */}
+      {/* ─── NAVBAR ─── */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -41,7 +41,7 @@ export default function LandingPage() {
             <span className="text-xl font-extrabold text-[#0d5068] tracking-tight">Waluma</span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm font-semibold text-gray-500">
-            <a href="#comment" className="hover:text-[#0d5068] transition">Comment ca marche</a>
+            <a href="#comment" className="hover:text-[#0d5068] transition">Comment ça marche</a>
             <a href="#soins" className="hover:text-[#0d5068] transition">Nos soins</a>
             <a href="#valeurs" className="hover:text-[#0d5068] transition">Pourquoi Waluma</a>
           </div>
@@ -50,34 +50,39 @@ export default function LandingPage() {
               Espace admin
             </Link>
             <a href="#telecharger" className="bg-[#22c55e] text-white text-sm font-bold px-4 py-2 rounded-xl hover:bg-[#16a34a] transition">
-              Telecharger
+              Télécharger
             </a>
           </div>
         </div>
       </nav>
 
-      {/* HERO */}
+      {/* ─── HERO ─── */}
       <section className="pt-32 pb-24 px-6 bg-gradient-to-br from-[#0d5068] via-[#0a3f52] to-[#061e28] relative overflow-hidden">
+        {/* Décorations */}
         <div className="absolute top-0 right-0 w-96 h-96 bg-[#22c55e]/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
         <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full blur-2xl translate-y-1/2 -translate-x-1/2" />
+
         <div className="max-w-4xl mx-auto text-center relative z-10">
           <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm border border-white/20 rounded-full px-4 py-2 mb-8">
             <span className="w-2 h-2 bg-[#22c55e] rounded-full animate-pulse" />
-            <span className="text-white/80 text-sm font-semibold">Disponible a Dakar · Bientot dans tout le Senegal</span>
+            <span className="text-white/80 text-sm font-semibold">Disponible à Dakar · Bientôt dans tout le Sénégal</span>
           </div>
+
           <h1 className="text-5xl md:text-6xl font-extrabold text-white leading-tight tracking-tight mb-6">
-            Votre sante,{' '}
-            <span className="text-[#4ade80]">a domicile.</span>
+            Votre santé,{' '}
+            <span className="text-[#4ade80]">à domicile.</span>
             <br />En quelques minutes.
           </h1>
+
           <p className="text-xl text-white/60 max-w-2xl mx-auto mb-10 leading-relaxed">
-            Waluma connecte patients et professionnels de sante qualifies pour des soins rapides, fiables et securises directement chez vous a Dakar.
+            Waluma connecte patients et professionnels de santé qualifiés pour des soins rapides, fiables et sécurisés directement chez vous à Dakar.
           </p>
+
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4" id="telecharger">
             <a href="#" className="flex items-center gap-3 bg-white text-[#0d5068] font-bold px-6 py-4 rounded-2xl hover:bg-gray-50 transition shadow-xl shadow-black/20 w-full sm:w-auto justify-center">
               <span className="text-2xl">🍎</span>
               <div className="text-left">
-                <div className="text-xs text-gray-400 font-normal">Telecharger sur</div>
+                <div className="text-xs text-gray-400 font-normal">Télécharger sur</div>
                 <div>App Store</div>
               </div>
             </a>
@@ -89,11 +94,12 @@ export default function LandingPage() {
               </div>
             </a>
           </div>
+
           <div className="flex items-center justify-center gap-8 mt-12 text-white/50 text-sm">
             {[
-              { val: '6', label: 'Specialites' },
-              { val: '+30', label: 'Praticiens verifies' },
-              { val: '<30 min', label: 'Temps de reponse' },
+              { val: '6', label: 'Spécialités' },
+              { val: '+30', label: 'Praticiens vérifiés' },
+              { val: '<30 min', label: 'Temps de réponse' },
             ].map(s => (
               <div key={s.label} className="text-center">
                 <div className="text-2xl font-extrabold text-white">{s.val}</div>
@@ -104,12 +110,12 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* COMMENT CA MARCHE */}
+      {/* ─── COMMENT ÇA MARCHE ─── */}
       <section id="comment" className="py-24 px-6 bg-[#f5f4ef]">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
             <div className="text-[#22c55e] text-sm font-bold uppercase tracking-widest mb-3">Simple et rapide</div>
-            <h2 className="text-4xl font-extrabold text-[#0d5068] tracking-tight">Comment ca marche ?</h2>
+            <h2 className="text-4xl font-extrabold text-[#0d5068] tracking-tight">Comment ça marche ?</h2>
           </div>
           <div className="grid md:grid-cols-4 gap-8">
             {ETAPES.map((e, i) => (
@@ -130,13 +136,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* SOINS */}
+      {/* ─── SOINS ─── */}
       <section id="soins" className="py-24 px-6 bg-white">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
-            <div className="text-[#22c55e] text-sm font-bold uppercase tracking-widest mb-3">Nos specialites</div>
+            <div className="text-[#22c55e] text-sm font-bold uppercase tracking-widest mb-3">Nos spécialités</div>
             <h2 className="text-4xl font-extrabold text-[#0d5068] tracking-tight">Des soins pour chaque besoin</h2>
-            <p className="text-gray-500 mt-4 max-w-xl mx-auto">Tous nos praticiens sont diplomes et verifies. Ils se deplacent directement a votre domicile a Dakar.</p>
+            <p className="text-gray-500 mt-4 max-w-xl mx-auto">Tous nos praticiens sont diplômés et vérifiés. Ils se déplacent directement à votre domicile à Dakar.</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {SPECIALITES.map(sp => (
@@ -147,11 +153,11 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-          <p className="text-center text-sm text-gray-400 mt-8">+ frais de deplacement selon la zone · Les tarifs peuvent varier selon le praticien</p>
+          <p className="text-center text-sm text-gray-400 mt-8">+ frais de déplacement selon la zone · Les tarifs peuvent varier selon le praticien</p>
         </div>
       </section>
 
-      {/* VALEURS */}
+      {/* ─── VALEURS ─── */}
       <section id="valeurs" className="py-24 px-6 bg-gradient-to-br from-[#0d5068] to-[#083d50]">
         <div className="max-w-5xl mx-auto">
           <div className="text-center mb-16">
@@ -170,19 +176,19 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* CTA FINAL */}
+      {/* ─── CTA FINAL ─── */}
       <section className="py-24 px-6 bg-white">
         <div className="max-w-2xl mx-auto text-center">
           <h2 className="text-4xl font-extrabold text-[#0d5068] tracking-tight mb-4">
             Prenez soin de vous,<br />
-            <span className="text-[#22c55e]">on s&apos;occupe du reste.</span>
+            <span className="text-[#22c55e]">on s'occupe du reste.</span>
           </h2>
-          <p className="text-gray-500 mb-10">Telechargez Waluma et reservez votre premier soin a domicile en moins de 2 minutes.</p>
+          <p className="text-gray-500 mb-10">Téléchargez Waluma et réservez votre premier soin à domicile en moins de 2 minutes.</p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <a href="#" className="flex items-center gap-3 bg-[#0d5068] text-white font-bold px-6 py-4 rounded-2xl hover:bg-[#0a3f52] transition w-full sm:w-auto justify-center">
               <span className="text-2xl">🍎</span>
               <div className="text-left">
-                <div className="text-xs text-white/50 font-normal">Telecharger sur</div>
+                <div className="text-xs text-white/50 font-normal">Télécharger sur</div>
                 <div>App Store</div>
               </div>
             </a>
@@ -197,7 +203,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* FOOTER */}
+      {/* ─── FOOTER ─── */}
       <footer className="bg-[#061e28] text-white/50 py-12 px-6">
         <div className="max-w-6xl mx-auto">
           <div className="grid md:grid-cols-4 gap-8 mb-10">
@@ -206,54 +212,60 @@ export default function LandingPage() {
                 <span className="text-xl">💚</span>
                 <span className="text-lg font-extrabold text-white">Waluma</span>
               </div>
-              <p className="text-sm leading-relaxed mb-4">Des soins a domicile professionnels et rapides a Dakar. Bientot dans tout le Senegal et en Afrique.</p>
+              <p className="text-sm leading-relaxed mb-4">
+                Des soins à domicile professionnels et rapides à Dakar. Bientôt dans tout le Sénégal et en Afrique.
+              </p>
               <div className="flex gap-3">
                 {[
                   { label: 'Facebook', icon: 'f', href: '#' },
                   { label: 'Instagram', icon: '📸', href: '#' },
                   { label: 'LinkedIn', icon: 'in', href: '#' },
-                  { label: 'X', icon: 'X', href: '#' },
+                  { label: 'X', icon: '✕', href: '#' },
                 ].map(r => (
                   <a key={r.label} href={r.href} aria-label={r.label}
-                    className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center text-xs font-bold text-white hover:bg-[#22c55e] transition">
+                    className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center text-xs font-bold text-white hover:bg-[#22c55e] hover:text-white transition">
                     {r.icon}
                   </a>
                 ))}
               </div>
             </div>
+
             <div>
               <div className="text-white font-bold mb-4 text-sm uppercase tracking-wider">Soins</div>
               <ul className="space-y-2 text-sm">
-                {['Soins infirmiers', 'Medecin generaliste', 'Prelevement', 'Kinesitherapie', 'Sage-femme', 'Pediatre'].map(s => (
+                {['Soins infirmiers', 'Médecin généraliste', 'Prélèvement', 'Kinésithérapie', 'Sage-femme', 'Pédiatre'].map(s => (
                   <li key={s}><a href="#soins" className="hover:text-white transition">{s}</a></li>
                 ))}
               </ul>
             </div>
+
             <div>
               <div className="text-white font-bold mb-4 text-sm uppercase tracking-wider">Liens utiles</div>
               <ul className="space-y-2 text-sm">
-                <li><a href="#comment" className="hover:text-white transition">Comment ca marche</a></li>
+                <li><a href="#comment" className="hover:text-white transition">Comment ça marche</a></li>
                 <li><a href="#valeurs" className="hover:text-white transition">Pourquoi Waluma</a></li>
                 <li><Link href="/legal/cgu" className="hover:text-white transition">CGU</Link></li>
-                <li><Link href="/legal/confidentialite" className="hover:text-white transition">Politique de confidentialite</Link></li>
-                <li><Link href="/legal/mentions-legales" className="hover:text-white transition">Mentions legales</Link></li>
+                <li><Link href="/legal/confidentialite" className="hover:text-white transition">Politique de confidentialité</Link></li>
+                <li><Link href="/legal/mentions-legales" className="hover:text-white transition">Mentions légales</Link></li>
                 <li><Link href="/legal/cookies" className="hover:text-white transition">Politique de cookies</Link></li>
               </ul>
             </div>
+
             <div>
               <div className="text-white font-bold mb-4 text-sm uppercase tracking-wider">Contact</div>
               <ul className="space-y-2 text-sm">
                 <li><a href="mailto:contact@waluma.app" className="hover:text-white transition">contact@waluma.app</a></li>
                 <li><a href="mailto:support@waluma.app" className="hover:text-white transition">support@waluma.app</a></li>
-                <li className="text-white/30 text-xs pt-2">Dakar, Senegal</li>
+                <li className="text-white/30 text-xs pt-2">Dakar, Sénégal</li>
               </ul>
             </div>
           </div>
+
           <div className="border-t border-white/10 pt-6 flex flex-col md:flex-row items-center justify-between gap-4 text-xs">
-            <span>© {new Date().getFullYear()} Waluma. Tous droits reserves.</span>
+            <span>© {new Date().getFullYear()} Waluma. Tous droits réservés.</span>
             <div className="flex gap-4">
               <Link href="/legal/cgu" className="hover:text-white transition">CGU</Link>
-              <Link href="/legal/confidentialite" className="hover:text-white transition">Confidentialite</Link>
+              <Link href="/legal/confidentialite" className="hover:text-white transition">Confidentialité</Link>
               <Link href="/legal/cookies" className="hover:text-white transition">Cookies</Link>
             </div>
           </div>
