@@ -36,13 +36,20 @@ const STATUT_LABEL: Record<string, { label: string; color: string }> = {
   TERMINEE: { label: 'Soin terminé — paiement en attente', color: '#d97706' },
 }
 
-interface Article { id: string; titre: string; categorie: string; auteur: string; imageUrl: string | null }
+interface Article {
+  id: string
+  titre: string
+  categorie: string
+  auteur: string
+  imageUrl: string | null
+}
+
 interface MissionActive {
   id: string
   statut: string
   specialite: string
   adresseTexte: string
-  paiement: { statut: string } | null
+  paiements: { statut: string }[]
   praticien: { user: { prenom: string; nom: string } } | null
 }
 
@@ -64,10 +71,10 @@ export default function HomeScreen() {
 
       try {
         const { data } = await api.get('/missions?limit=10')
-        const active = data.missions.find((m: { statut: string; paiement?: { statut: string } | null }) =>
-  ['EN_ATTENTE', 'ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'].includes(m.statut) ||
-  (m.statut === 'TERMINEE' && m.paiements?.[0]?.statut !== 'PAYE')
-)
+        const active = data.missions.find((m: { statut: string; paiements?: { statut: string }[] }) =>
+          ['EN_ATTENTE', 'ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'].includes(m.statut) ||
+          (m.statut === 'TERMINEE' && m.paiements?.[0]?.statut !== 'PAYE')
+        )
         setMissionActive(active ?? null)
       } catch {}
     }
@@ -96,7 +103,6 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* Mission active ou CTA demande */}
           {missionActive ? (
             <TouchableOpacity
               style={s.missionActiveCard}
@@ -108,10 +114,10 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.missionActiveTitle}>
-                  {missionActive.statut === 'TERMINEE' && missionActive.paiement?.statut !== 'PAYE'
-  ? 'Soin terminé — paiement en attente'
-  : STATUT_LABEL[missionActive.statut]?.label ?? 'Mission en cours'
-}
+                  {missionActive.statut === 'TERMINEE' && missionActive.paiements?.[0]?.statut !== 'PAYE'
+                    ? 'Soin terminé — paiement en attente'
+                    : STATUT_LABEL[missionActive.statut]?.label ?? 'Mission en cours'
+                  }
                 </Text>
                 <Text style={s.missionActiveSub}>
                   {SPECIALITE_LABEL[missionActive.specialite]}
@@ -136,7 +142,11 @@ export default function HomeScreen() {
         </LinearGradient>
       </SafeAreaView>
 
-      <ScrollView style={s.body} showsVerticalScrollIndicator={false} contentContainerStyle={s.scroll}>
+      <ScrollView
+        style={s.body}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={s.scroll}
+      >
         <View style={s.section}>
           <View style={s.sectionRow}>
             <Text style={s.sectionTitle}>Soins disponibles</Text>

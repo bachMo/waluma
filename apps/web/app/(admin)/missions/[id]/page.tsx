@@ -1,4 +1,6 @@
+
 'use client'
+
 import { useEffect, useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Topbar from '@/components/admin/Topbar'
@@ -24,11 +26,22 @@ interface Mission {
   debutSoinAt: string | null
   finSoinAt: string | null
   annuleeAt: string | null
-  patient: { nom: string; prenom: string; telephone: string }
+  patient: {
+    nom: string
+    prenom: string
+    telephone: string
+  }
   praticien: {
     id: string
-    user: { nom: string; prenom: string; telephone: string }
-    specialites: { specialite: string; principale: boolean }[]
+    user: {
+      nom: string
+      prenom: string
+      telephone: string
+    }
+    specialites: {
+      specialite: string
+      principale: boolean
+    }[]
   } | null
   compteRendu: {
     acteRealise: string
@@ -62,37 +75,69 @@ interface Mission {
   } | null
 }
 
-const statutVariant: Record<string, 'active' | 'enroute' | 'inprog' | 'urgent' | 'done' | 'cancelled' | 'pending'> = {
-  EN_ATTENTE: 'urgent', ACCEPTEE: 'pending', EN_ROUTE: 'enroute',
-  ARRIVE: 'enroute', EN_COURS: 'inprog', TERMINEE: 'done',
-  ANNULEE: 'cancelled', EXPIREE: 'cancelled',
+const statutVariant: Record<
+  string,
+  'active' | 'enroute' | 'inprog' | 'urgent' | 'done' | 'cancelled' | 'pending'
+> = {
+  EN_ATTENTE: 'urgent',
+  ACCEPTEE: 'pending',
+  EN_ROUTE: 'enroute',
+  ARRIVE: 'enroute',
+  EN_COURS: 'inprog',
+  TERMINEE: 'done',
+  ANNULEE: 'cancelled',
+  EXPIREE: 'cancelled',
 }
 
 const statutLabel: Record<string, string> = {
-  EN_ATTENTE: 'En attente', ACCEPTEE: 'Acceptée', EN_ROUTE: 'En route',
-  ARRIVE: 'Arrivé', EN_COURS: 'Soin en cours', TERMINEE: 'Terminée',
-  ANNULEE: 'Annulée', EXPIREE: 'Expirée',
+  EN_ATTENTE: 'En attente',
+  ACCEPTEE: 'Acceptée',
+  EN_ROUTE: 'En route',
+  ARRIVE: 'Arrivé',
+  EN_COURS: 'Soin en cours',
+  TERMINEE: 'Terminée',
+  ANNULEE: 'Annulée',
+  EXPIREE: 'Expirée',
 }
 
 const specialiteLabel: Record<string, string> = {
-  INFIRMIER: 'Soins infirmiers', MEDECIN_GENERALISTE: 'Médecin généraliste',
-  SAGE_FEMME: 'Sage-femme', KINESITHERAPEUTE: 'Kinésithérapie',
-  PRELEVEUR: 'Prélèvement', PEDIATRE: 'Pédiatre', AUTRE: 'Autre',
+  INFIRMIER: 'Soins infirmiers',
+  MEDECIN_GENERALISTE: 'Médecin généraliste',
+  SAGE_FEMME: 'Sage-femme',
+  KINESITHERAPEUTE: 'Kinésithérapie',
+  PRELEVEUR: 'Prélèvement',
+  PEDIATRE: 'Pédiatrie',
+  AUTRE: 'Autre',
 }
 
 function formatDate(iso: string | null) {
   if (!iso) return '—'
+
   return new Date(iso).toLocaleDateString('fr-FR', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   })
 }
 
-function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string
+  value: React.ReactNode
+}) {
   return (
-    <div className="flex justify-between items-start py-2.5 border-b border-gray-50 last:border-b-0 gap-4">
-      <span className="text-[12px] text-gray-500 flex-shrink-0">{label}</span>
-      <span className="text-[13px] font-semibold text-gray-900 text-right">{value}</span>
+    <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start py-2.5 border-b border-gray-50 last:border-b-0 gap-1.5 sm:gap-4 min-w-0">
+      <span className="text-[12px] text-gray-500 flex-shrink-0">
+        {label}
+      </span>
+
+      <span className="text-[13px] font-semibold text-gray-900 sm:text-right break-words min-w-0 max-w-full">
+        {value}
+      </span>
     </div>
   )
 }
@@ -117,7 +162,9 @@ export default function MissionDetailPage() {
     }
   }
 
-  useEffect(() => { load() }, [id])
+  useEffect(() => {
+    load()
+  }, [id])
 
   async function handleStatut(statut: string) {
     await api.patch(`/missions/${id}/statut`, { statut })
@@ -126,9 +173,12 @@ export default function MissionDetailPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full min-w-0">
         <Topbar title="Détail mission" />
-        <div className="flex-1 flex items-center justify-center text-sm text-gray-400">Chargement...</div>
+
+        <div className="flex-1 flex items-center justify-center text-sm text-gray-400 p-6">
+          Chargement...
+        </div>
       </div>
     )
   }
@@ -136,169 +186,387 @@ export default function MissionDetailPage() {
   if (!mission) return null
 
   const TIMELINE = [
-    { label: 'Demande créée', date: mission.createdAt },
-    { label: 'Praticien accepté', date: mission.accepteeAt },
-    { label: 'En route', date: mission.enRouteAt },
-    { label: 'Arrivé', date: mission.arriveeAt },
-    { label: 'Soin démarré', date: mission.debutSoinAt },
-    { label: 'Soin terminé', date: mission.finSoinAt },
-    { label: 'Annulée', date: mission.annuleeAt },
-  ].filter(t => t.date)
+    {
+      label: 'Demande créée',
+      date: mission.createdAt,
+    },
+    {
+      label: 'Praticien accepté',
+      date: mission.accepteeAt,
+    },
+    {
+      label: 'En route',
+      date: mission.enRouteAt,
+    },
+    {
+      label: 'Arrivé',
+      date: mission.arriveeAt,
+    },
+    {
+      label: 'Soin démarré',
+      date: mission.debutSoinAt,
+    },
+    {
+      label: 'Soin terminé',
+      date: mission.finSoinAt,
+    },
+    {
+      label: 'Annulée',
+      date: mission.annuleeAt,
+    },
+  ].filter((t) => t.date)
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-w-0">
       <Topbar title="Détail mission">
-        <button
-          onClick={() => router.push('/missions')}
-          className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition"
-        >
-          ← Retour
-        </button>
-        {mission.statut === 'EN_ATTENTE' && !mission.praticien && (
+        <div className="flex flex-wrap items-center gap-2">
           <button
-            onClick={() => {
-              const praticienId = prompt('ID du praticien à assigner :')
-              if (!praticienId) return
-              setAssigning(true)
-              api.patch(`/missions/${id}/assigner`, { praticienId })
-                .then(() => load())
-                .finally(() => setAssigning(false))
-            }}
-            disabled={assigning}
-            className="text-xs font-bold bg-[#0d5068] text-white rounded-lg px-3 py-1.5 hover:bg-[#0a3f52] transition disabled:opacity-50"
+            onClick={() => router.push('/missions')}
+            className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition whitespace-nowrap"
           >
-            {assigning ? '...' : 'Assigner un praticien'}
+            ← Retour
           </button>
-        )}
-        {['ACCEPTEE', 'EN_ROUTE', 'ARRIVE', 'EN_COURS'].includes(mission.statut) && (
-          <button
-            onClick={() => handleStatut('ANNULEE')}
-            className="text-xs font-bold bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-100 transition"
-          >
-            Annuler la mission
-          </button>
-        )}
+
+          {mission.statut === 'EN_ATTENTE' &&
+            !mission.praticien && (
+              <button
+                onClick={() => {
+                  const praticienId = prompt(
+                    'ID du praticien à assigner :'
+                  )
+
+                  if (!praticienId) return
+
+                  setAssigning(true)
+
+                  api
+                    .patch(
+                      `/missions/${id}/assigner`,
+                      { praticienId }
+                    )
+                    .then(() => load())
+                    .finally(() => setAssigning(false))
+                }}
+                disabled={assigning}
+                className="text-xs font-bold bg-[#0d5068] text-white rounded-lg px-3 py-1.5 hover:bg-[#0a3f52] transition disabled:opacity-50 whitespace-nowrap"
+              >
+                {assigning
+                  ? '...'
+                  : 'Assigner un praticien'}
+              </button>
+            )}
+
+          {[
+            'ACCEPTEE',
+            'EN_ROUTE',
+            'ARRIVE',
+            'EN_COURS',
+          ].includes(mission.statut) && (
+            <button
+              onClick={() => handleStatut('ANNULEE')}
+              className="text-xs font-bold bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-100 transition whitespace-nowrap"
+            >
+              Annuler la mission
+            </button>
+          )}
+        </div>
       </Topbar>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0">
         {/* Header */}
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <Badge variant={statutVariant[mission.statut] ?? 'pending'} label={statutLabel[mission.statut] ?? mission.statut} />
+        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
+              <Badge
+                variant={
+                  statutVariant[mission.statut] ??
+                  'pending'
+                }
+                label={
+                  statutLabel[mission.statut] ??
+                  mission.statut
+                }
+              />
+
               {mission.urgence && (
-                <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-wider">Urgent</span>
+                <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">
+                  Urgent
+                </span>
               )}
             </div>
-            <h1 className="font-extrabold text-xl text-gray-900 tracking-tight">
+
+            <h1 className="font-extrabold text-lg sm:text-xl text-gray-900 tracking-tight break-words">
               {specialiteLabel[mission.specialite]}
             </h1>
-            <p className="text-sm text-gray-400 mt-0.5">
-              Réf. {mission.reference.slice(0, 12).toUpperCase()} · Créée le {formatDate(mission.createdAt)}
+
+            <p className="text-xs sm:text-sm text-gray-400 mt-0.5 break-words">
+              Réf.{' '}
+              {mission.reference
+                .slice(0, 12)
+                .toUpperCase()}{' '}
+              · Créée le {formatDate(mission.createdAt)}
             </p>
           </div>
-          <div className="text-right">
-            <p className="text-2xl font-extrabold text-gray-900">{mission.montantTotal.toLocaleString()} FCFA</p>
-            <p className="text-xs text-gray-400">Montant total</p>
+
+          <div className="text-left lg:text-right flex-shrink-0">
+            <p className="text-xl sm:text-2xl font-extrabold text-gray-900">
+              {mission.montantTotal.toLocaleString()}{' '}
+              FCFA
+            </p>
+
+            <p className="text-xs text-gray-400">
+              Montant total
+            </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-5">
-
+        {/* Contenu principal */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-5">
           {/* Colonne gauche */}
-          <div className="col-span-2 space-y-5">
-
+          <div className="xl:col-span-2 space-y-4 lg:space-y-5 min-w-0">
             {/* Patient */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <h2 className="text-sm font-bold text-gray-800 mb-4">Patient</h2>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-[#e0f2fe] flex items-center justify-center text-sm font-bold text-[#0d5068]">
-                  {mission.patient.prenom[0]}{mission.patient.nom[0]}
+            <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
+              <h2 className="text-sm font-bold text-gray-800 mb-4">
+                Patient
+              </h2>
+
+              <div className="flex items-center gap-3 mb-4 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#e0f2fe] flex items-center justify-center text-sm font-bold text-[#0d5068] flex-shrink-0">
+                  {mission.patient.prenom[0]}
+                  {mission.patient.nom[0]}
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-900">{mission.patient.prenom} {mission.patient.nom}</p>
-                  <p className="text-sm text-gray-500">{mission.patient.telephone}</p>
+
+                <div className="min-w-0">
+                  <p className="font-semibold text-gray-900 truncate">
+                    {mission.patient.prenom}{' '}
+                    {mission.patient.nom}
+                  </p>
+
+                  <p className="text-sm text-gray-500 truncate">
+                    {mission.patient.telephone}
+                  </p>
                 </div>
               </div>
-              <InfoRow label="Adresse" value={mission.adresseTexte} />
-              {mission.notePatient && <InfoRow label="Note pour praticien" value={mission.notePatient} />}
+
+              <InfoRow
+                label="Adresse"
+                value={mission.adresseTexte}
+              />
+
+              {mission.notePatient && (
+                <InfoRow
+                  label="Note pour praticien"
+                  value={mission.notePatient}
+                />
+              )}
             </div>
 
             {/* Praticien */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <h2 className="text-sm font-bold text-gray-800 mb-4">Praticien</h2>
+            <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
+              <h2 className="text-sm font-bold text-gray-800 mb-4">
+                Praticien
+              </h2>
+
               {mission.praticien ? (
                 <>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-[#dcfce7] flex items-center justify-center text-sm font-bold text-green-700">
-                      {mission.praticien.user.prenom[0]}{mission.praticien.user.nom[0]}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-10 rounded-xl bg-[#dcfce7] flex items-center justify-center text-sm font-bold text-green-700 flex-shrink-0">
+                        {mission.praticien.user.prenom[0]}
+                        {mission.praticien.user.nom[0]}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 truncate">
+                          {mission.praticien.user.prenom}{' '}
+                          {mission.praticien.user.nom}
+                        </p>
+
+                        <p className="text-sm text-gray-500 truncate">
+                          {mission.praticien.user.telephone}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">{mission.praticien.user.prenom} {mission.praticien.user.nom}</p>
-                      <p className="text-sm text-gray-500">{mission.praticien.user.telephone}</p>
-                    </div>
+
                     <button
-                      onClick={() => router.push(`/praticiens/${mission.praticien!.id}`)}
-                      className="ml-auto text-xs font-semibold text-[#0d5068] border border-[#0d5068]/20 bg-[#e0f2fe] rounded-lg px-2 py-1 hover:bg-[#cfe8f5] transition"
+                      onClick={() =>
+                        router.push(
+                          `/praticiens/${mission.praticien!.id}`
+                        )
+                      }
+                      className="sm:ml-auto text-xs font-semibold text-[#0d5068] border border-[#0d5068]/20 bg-[#e0f2fe] rounded-lg px-2 py-1 hover:bg-[#cfe8f5] transition whitespace-nowrap self-start sm:self-auto"
                     >
                       Voir la fiche
                     </button>
                   </div>
-                  <InfoRow label="Spécialité" value={specialiteLabel[mission.praticien.specialites.find(s => s.principale)?.specialite ?? ''] ?? '—'} />
+
+                  <InfoRow
+                    label="Spécialité"
+                    value={
+                      specialiteLabel[
+                        mission.praticien.specialites.find(
+                          (s) => s.principale
+                        )?.specialite ?? ''
+                      ] ?? '—'
+                    }
+                  />
                 </>
               ) : (
                 <div className="text-center py-6 text-gray-400">
-                  <p className="text-sm font-semibold text-red-600 mb-1">Aucun praticien assigné</p>
-                  <p className="text-xs">La mission est en attente d'un praticien disponible</p>
+                  <p className="text-sm font-semibold text-red-600 mb-1">
+                    Aucun praticien assigné
+                  </p>
+
+                  <p className="text-xs">
+                    La mission est en attente d'un praticien
+                    disponible
+                  </p>
                 </div>
               )}
             </div>
 
             {/* Compte rendu */}
             {mission.compteRendu && (
-              <div className="bg-white border border-gray-100 rounded-xl p-5">
-                <h2 className="text-sm font-bold text-gray-800 mb-4">Compte rendu de soin</h2>
-                <InfoRow label="Acte réalisé" value={mission.compteRendu.acteRealise} />
+              <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
+                <h2 className="text-sm font-bold text-gray-800 mb-4">
+                  Compte rendu de soin
+                </h2>
+
+                <InfoRow
+                  label="Acte réalisé"
+                  value={mission.compteRendu.acteRealise}
+                />
+
                 <div className="py-2.5 border-b border-gray-50">
-                  <p className="text-[12px] text-gray-500 mb-1.5">Description</p>
-                  <p className="text-[13px] text-gray-900 leading-relaxed">{mission.compteRendu.description}</p>
+                  <p className="text-[12px] text-gray-500 mb-1.5">
+                    Description
+                  </p>
+
+                  <p className="text-[13px] text-gray-900 leading-relaxed break-words">
+                    {mission.compteRendu.description}
+                  </p>
                 </div>
-                {(mission.compteRendu.tension || mission.compteRendu.temperature || mission.compteRendu.pouls || mission.compteRendu.spo2) && (
-                  <div className="grid grid-cols-4 gap-3 mt-3">
+
+                {(
+                  mission.compteRendu.tension ||
+                  mission.compteRendu.temperature ||
+                  mission.compteRendu.pouls ||
+                  mission.compteRendu.spo2
+                ) && (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mt-3">
                     {[
-                      { label: 'Tension', value: mission.compteRendu.tension, unit: 'mmHg' },
-                      { label: 'Temp.', value: mission.compteRendu.temperature, unit: '°C' },
-                      { label: 'Pouls', value: mission.compteRendu.pouls, unit: 'bpm' },
-                      { label: 'SpO₂', value: mission.compteRendu.spo2, unit: '%' },
-                    ].map(c => c.value ? (
-                      <div key={c.label} className="bg-gray-50 rounded-xl p-3 text-center">
-                        <p className="text-[10px] text-gray-400 font-semibold uppercase mb-1">{c.label}</p>
-                        <p className="text-[15px] font-bold text-gray-900">{c.value}<span className="text-[10px] font-normal text-gray-400 ml-0.5">{c.unit}</span></p>
-                      </div>
-                    ) : null)}
+                      {
+                        label: 'Tension',
+                        value:
+                          mission.compteRendu.tension,
+                        unit: 'mmHg',
+                      },
+                      {
+                        label: 'Temp.',
+                        value:
+                          mission.compteRendu.temperature,
+                        unit: '°C',
+                      },
+                      {
+                        label: 'Pouls',
+                        value: mission.compteRendu.pouls,
+                        unit: 'bpm',
+                      },
+                      {
+                        label: 'SpO₂',
+                        value: mission.compteRendu.spo2,
+                        unit: '%',
+                      },
+                    ].map((c) =>
+                      c.value ? (
+                        <div
+                          key={c.label}
+                          className="bg-gray-50 rounded-xl p-3 text-center min-w-0"
+                        >
+                          <p className="text-[10px] text-gray-400 font-semibold uppercase mb-1">
+                            {c.label}
+                          </p>
+
+                          <p className="text-[15px] font-bold text-gray-900 break-words">
+                            {c.value}
+                            <span className="text-[10px] font-normal text-gray-400 ml-0.5">
+                              {c.unit}
+                            </span>
+                          </p>
+                        </div>
+                      ) : null
+                    )}
                   </div>
                 )}
-                {mission.compteRendu.recommandations && <InfoRow label="Recommandations" value={mission.compteRendu.recommandations} />}
-                {mission.compteRendu.suiteNecessaire && <InfoRow label="Suite nécessaire" value={mission.compteRendu.suiteNecessaire} />}
-                <InfoRow label="Soumis le" value={formatDate(mission.compteRendu.soumisAt)} />
+
+                {mission.compteRendu.recommandations && (
+                  <InfoRow
+                    label="Recommandations"
+                    value={
+                      mission.compteRendu.recommandations
+                    }
+                  />
+                )}
+
+                {mission.compteRendu.suiteNecessaire && (
+                  <InfoRow
+                    label="Suite nécessaire"
+                    value={
+                      mission.compteRendu.suiteNecessaire
+                    }
+                  />
+                )}
+
+                <InfoRow
+                  label="Soumis le"
+                  value={formatDate(
+                    mission.compteRendu.soumisAt
+                  )}
+                />
               </div>
             )}
 
             {/* Avis */}
             {mission.avis && (
-              <div className="bg-white border border-gray-100 rounded-xl p-5">
-                <h2 className="text-sm font-bold text-gray-800 mb-4">Avis patient</h2>
-                <div className="flex items-center gap-2 mb-3">
-                  {[1,2,3,4,5].map(i => (
-                    <span key={i} className={`text-xl ${i <= mission.avis!.note ? 'text-yellow-400' : 'text-gray-200'}`}>★</span>
+              <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
+                <h2 className="text-sm font-bold text-gray-800 mb-4">
+                  Avis patient
+                </h2>
+
+                <div className="flex flex-wrap items-center gap-1 sm:gap-2 mb-3">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <span
+                      key={i}
+                      className={`text-xl ${
+                        i <= mission.avis!.note
+                          ? 'text-yellow-400'
+                          : 'text-gray-200'
+                      }`}
+                    >
+                      ★
+                    </span>
                   ))}
-                  <span className="text-sm font-bold text-gray-900 ml-1">{mission.avis.note}/5</span>
+
+                  <span className="text-sm font-bold text-gray-900 ml-1">
+                    {mission.avis.note}/5
+                  </span>
                 </div>
-                {mission.avis.commentaire && <p className="text-sm text-gray-600 italic">"{mission.avis.commentaire}"</p>}
+
+                {mission.avis.commentaire && (
+                  <p className="text-sm text-gray-600 italic break-words">
+                    "{mission.avis.commentaire}"
+                  </p>
+                )}
+
                 {mission.avis.tags.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-3">
-                    {mission.avis.tags.map(tag => (
-                      <span key={tag} className="text-[11px] font-semibold bg-[#e0f2fe] text-[#0d5068] px-2 py-0.5 rounded-full">{tag}</span>
+                    {mission.avis.tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="text-[11px] font-semibold bg-[#e0f2fe] text-[#0d5068] px-2 py-0.5 rounded-full break-words"
+                      >
+                        {tag}
+                      </span>
                     ))}
                   </div>
                 )}
@@ -307,11 +575,28 @@ export default function MissionDetailPage() {
 
             {/* Litige */}
             {mission.litige && (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-5">
-                <h2 className="text-sm font-bold text-red-800 mb-3">⚠ Litige associé</h2>
-                <InfoRow label="Motif" value={mission.litige.motif} />
-                <InfoRow label="Statut" value={mission.litige.statut} />
-                {mission.litige.description && <InfoRow label="Description" value={mission.litige.description} />}
+              <div className="bg-red-50 border border-red-200 rounded-xl p-4 sm:p-5 min-w-0">
+                <h2 className="text-sm font-bold text-red-800 mb-3">
+                  ⚠ Litige associé
+                </h2>
+
+                <InfoRow
+                  label="Motif"
+                  value={mission.litige.motif}
+                />
+
+                <InfoRow
+                  label="Statut"
+                  value={mission.litige.statut}
+                />
+
+                {mission.litige.description && (
+                  <InfoRow
+                    label="Description"
+                    value={mission.litige.description}
+                  />
+                )}
+
                 <button
                   onClick={() => router.push('/litiges')}
                   className="mt-3 text-xs font-bold text-red-700 border border-red-300 rounded-lg px-3 py-1.5 hover:bg-red-100 transition"
@@ -323,61 +608,158 @@ export default function MissionDetailPage() {
           </div>
 
           {/* Colonne droite */}
-          <div className="space-y-5">
+          <div className="space-y-4 lg:space-y-5 min-w-0">
+            {/* Finances */}
+            <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
+              <h2 className="text-sm font-bold text-gray-800 mb-4">
+                Finances
+              </h2>
 
-            {/* Détails financiers */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <h2 className="text-sm font-bold text-gray-800 mb-4">Finances</h2>
-              <InfoRow label="Soin" value={`${mission.montantBase.toLocaleString()} FCFA`} />
-              <InfoRow label="Déplacement" value={`${mission.fraisDeplacement.toLocaleString()} FCFA`} />
-              <InfoRow label="Total" value={<span className="text-[#0d5068] font-extrabold">{mission.montantTotal.toLocaleString()} FCFA</span>} />
-              <InfoRow label="Commission (10%)" value={`${Math.round(mission.montantTotal * 0.1).toLocaleString()} FCFA`} />
-              <InfoRow label="Gain praticien" value={`${Math.round(mission.montantTotal * 0.9).toLocaleString()} FCFA`} />
+              <InfoRow
+                label="Soin"
+                value={`${mission.montantBase.toLocaleString()} FCFA`}
+              />
+
+              <InfoRow
+                label="Déplacement"
+                value={`${mission.fraisDeplacement.toLocaleString()} FCFA`}
+              />
+
+              <InfoRow
+                label="Total"
+                value={
+                  <span className="text-[#0d5068] font-extrabold">
+                    {mission.montantTotal.toLocaleString()}{' '}
+                    FCFA
+                  </span>
+                }
+              />
+
+              <InfoRow
+                label="Commission (10%)"
+                value={`${Math.round(
+                  mission.montantTotal * 0.1
+                ).toLocaleString()} FCFA`}
+              />
+
+              <InfoRow
+                label="Gain praticien"
+                value={`${Math.round(
+                  mission.montantTotal * 0.9
+                ).toLocaleString()} FCFA`}
+              />
 
               {mission.paiement && (
-                <>
-                  <div className="border-t border-gray-100 mt-2 pt-3">
-                    <InfoRow label="Statut paiement" value={
-                      <span className={`font-bold ${mission.paiement.statut === 'PAYE' ? 'text-green-600' : 'text-yellow-600'}`}>
+                <div className="border-t border-gray-100 mt-2 pt-3">
+                  <InfoRow
+                    label="Statut paiement"
+                    value={
+                      <span
+                        className={`font-bold ${
+                          mission.paiement.statut ===
+                          'PAYE'
+                            ? 'text-green-600'
+                            : 'text-yellow-600'
+                        }`}
+                      >
                         {mission.paiement.statut}
                       </span>
-                    } />
-                    <InfoRow label="Opérateur" value={mission.paiement.operateur} />
-                    {mission.paiement.payeAt && <InfoRow label="Payé le" value={formatDate(mission.paiement.payeAt)} />}
-                    {mission.paiement.referenceExterne && <InfoRow label="Référence" value={mission.paiement.referenceExterne} />}
-                  </div>
-                </>
-              )}
+                    }
+                  />
 
-              {!mission.paiement && mission.statut === 'TERMINEE' && (
-                <div className="mt-3 text-center">
-                  <span className="text-xs font-semibold text-yellow-600 bg-yellow-50 px-3 py-1.5 rounded-full">En attente de paiement</span>
+                  <InfoRow
+                    label="Opérateur"
+                    value={mission.paiement.operateur}
+                  />
+
+                  {mission.paiement.payeAt && (
+                    <InfoRow
+                      label="Payé le"
+                      value={formatDate(
+                        mission.paiement.payeAt
+                      )}
+                    />
+                  )}
+
+                  {mission.paiement
+                    .referenceExterne && (
+                    <InfoRow
+                      label="Référence"
+                      value={
+                        mission.paiement
+                          .referenceExterne
+                      }
+                    />
+                  )}
                 </div>
               )}
+
+              {!mission.paiement &&
+                mission.statut === 'TERMINEE' && (
+                  <div className="mt-3 text-center">
+                    <span className="text-xs font-semibold text-yellow-600 bg-yellow-50 px-3 py-1.5 rounded-full">
+                      En attente de paiement
+                    </span>
+                  </div>
+                )}
             </div>
 
             {/* Timeline */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <h2 className="text-sm font-bold text-gray-800 mb-4">Chronologie</h2>
+            <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
+              <h2 className="text-sm font-bold text-gray-800 mb-4">
+                Chronologie
+              </h2>
+
               <div className="space-y-3">
                 {TIMELINE.map((t, i) => (
-                  <div key={i} className="flex items-start gap-3">
+                  <div
+                    key={i}
+                    className="flex items-start gap-3"
+                  >
                     <div className="w-2 h-2 rounded-full bg-[#22c55e] mt-1.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-[12px] font-semibold text-gray-900">{t.label}</p>
-                      <p className="text-[11px] text-gray-400">{formatDate(t.date)}</p>
+
+                    <div className="min-w-0">
+                      <p className="text-[12px] font-semibold text-gray-900">
+                        {t.label}
+                      </p>
+
+                      <p className="text-[11px] text-gray-400 break-words">
+                        {formatDate(t.date)}
+                      </p>
                     </div>
                   </div>
                 ))}
               </div>
             </div>
 
-            {/* Infos mission */}
-            <div className="bg-white border border-gray-100 rounded-xl p-5">
-              <h2 className="text-sm font-bold text-gray-800 mb-4">Informations</h2>
-              <InfoRow label="Type" value={mission.type === 'IMMEDIATE' ? 'Immédiate' : 'Planifiée'} />
-              <InfoRow label="Spécialité" value={specialiteLabel[mission.specialite]} />
-              <InfoRow label="Urgence" value={mission.urgence ? '🔴 Oui' : 'Non'} />
+            {/* Informations */}
+            <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
+              <h2 className="text-sm font-bold text-gray-800 mb-4">
+                Informations
+              </h2>
+
+              <InfoRow
+                label="Type"
+                value={
+                  mission.type === 'IMMEDIATE'
+                    ? 'Immédiate'
+                    : 'Planifiée'
+                }
+              />
+
+              <InfoRow
+                label="Spécialité"
+                value={
+                  specialiteLabel[mission.specialite]
+                }
+              />
+
+              <InfoRow
+                label="Urgence"
+                value={
+                  mission.urgence ? '🔴 Oui' : 'Non'
+                }
+              />
             </div>
           </div>
         </div>
@@ -385,3 +767,4 @@ export default function MissionDetailPage() {
     </div>
   )
 }
+

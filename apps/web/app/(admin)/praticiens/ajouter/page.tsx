@@ -29,21 +29,32 @@ const OPERATEURS_MM = [
   { value: 'FREE_MONEY', label: 'Free Money' },
 ]
 
-interface MoyenPaiement {
-  operateur: string
-  numero: string
-}
-
-interface Document {
-  type: string
-  file: File
-  nom: string
-}
+interface MoyenPaiement { operateur: string; numero: string }
+interface Document { type: string; file: File; nom: string }
 
 function validerTelephone(tel: string): boolean {
-  const regex = /^\+221(70|75|76|77|78)\d{7}$/
-  return regex.test(tel.replace(/\s/g, ''))
+  return /^\+221(70|75|76|77|78)\d{7}$/.test(tel.replace(/\s/g, ''))
 }
+
+function Field({ label, required, error, children, hint }: {
+  label: string; required?: boolean; error?: string; children: React.ReactNode; hint?: string
+}) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold text-gray-500 mb-1.5">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      {children}
+      {error
+        ? <p className="text-xs text-red-500 mt-1">{error}</p>
+        : hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>
+      }
+    </div>
+  )
+}
+
+const inputCls = (err?: string) =>
+  `w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] transition ${err ? 'border-red-300 bg-red-50' : 'border-gray-200'}`
 
 export default function AjouterPraticienPage() {
   const router = useRouter()
@@ -51,7 +62,6 @@ export default function AjouterPraticienPage() {
   const [error, setError] = useState('')
   const [errors, setErrors] = useState<Record<string, string>>({})
 
-  // Infos personnelles
   const [prenom, setPrenom] = useState('')
   const [nom, setNom] = useState('')
   const [telephone, setTelephone] = useState('+221')
@@ -60,16 +70,13 @@ export default function AjouterPraticienPage() {
   const [anneesExp, setAnneesExp] = useState('')
   const [bio, setBio] = useState('')
 
-  // Zone d'intervention
   const [regionSelectionnee, setRegionSelectionnee] = useState('')
   const [modeZone, setModeZone] = useState<'region' | 'departements'>('region')
   const [departementsSelectionnes, setDepartementsSelectionnes] = useState<string[]>([])
 
-  // Moyens de paiement
   const [moyensPaiement, setMoyensPaiement] = useState<MoyenPaiement[]>([])
   const [accepteEspeces, setAccepteEspeces] = useState(false)
 
-  // Documents
   const [documents, setDocuments] = useState<Document[]>([])
   const [docType, setDocType] = useState('DIPLOME')
   const fileRef = useRef<HTMLInputElement>(null)
@@ -107,152 +114,117 @@ export default function AjouterPraticienPage() {
   }
 
   function validate(): boolean {
-    const newErrors: Record<string, string> = {}
-    if (!prenom.trim()) newErrors.prenom = 'Prénom requis'
-    if (!nom.trim()) newErrors.nom = 'Nom requis'
-    if (!validerTelephone(telephone)) newErrors.telephone = 'Format invalide : +221 suivi de 70/75/76/77/78 et 7 chiffres'
-    if (!regionSelectionnee) newErrors.zone = 'Choisissez une région'
-    if (modeZone === 'departements' && departementsSelectionnes.length === 0) newErrors.zone = 'Choisissez au moins un département'
-    if (moyensPaiement.length === 0 && !accepteEspeces) newErrors.paiement = 'Choisissez au moins un moyen de paiement'
+    const e: Record<string, string> = {}
+    if (!prenom.trim()) e.prenom = 'Prénom requis'
+    if (!nom.trim()) e.nom = 'Nom requis'
+    if (!validerTelephone(telephone)) e.telephone = 'Format invalide : +221 suivi de 70/75/76/77/78 et 7 chiffres'
+    if (!regionSelectionnee) e.zone = 'Choisissez une région'
+    if (modeZone === 'departements' && departementsSelectionnes.length === 0) e.zone = 'Choisissez au moins un département'
+    if (moyensPaiement.length === 0 && !accepteEspeces) e.paiement = 'Choisissez au moins un moyen de paiement'
     moyensPaiement.forEach(m => {
-      if (!validerTelephone(m.numero)) newErrors[`mm_${m.operateur}`] = `Numéro ${m.operateur} invalide`
+      if (!validerTelephone(m.numero)) e[`mm_${m.operateur}`] = `Numéro ${m.operateur} invalide`
     })
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    setErrors(e)
+    return Object.keys(e).length === 0
   }
 
   async function handleSubmit() {
-  if (!validate()) return
-  setSaving(true)
-  setError('')
-
-  try {
-    const zoneIntervention = modeZone === 'region'
-      ? [regionSelectionnee]
-      : departementsSelectionnes
-
-    const formData = new FormData()
-    formData.append('prenom', prenom)
-    formData.append('nom', nom)
-    formData.append('telephone', telephone.replace(/\s/g, ''))
-    formData.append('specialite', specialite)
-    formData.append('numeroOrdre', numeroOrdre)
-    formData.append('anneesExperience', anneesExp || '0')
-    formData.append('bio', bio)
-    formData.append('zoneIntervention', JSON.stringify(zoneIntervention))
-    formData.append('moyensPaiement', JSON.stringify(moyensPaiement))
-    formData.append('accepteEspeces', String(accepteEspeces))
-
-    // Envoyer les types en JSON séparé
-    formData.append('documentsTypes', JSON.stringify(documents.map(d => d.type)))
-
-    // Envoyer les fichiers sous le même champ 'files'
-    documents.forEach((doc) => {
-      formData.append('files', doc.file)
-    })
-
-    await api.post('/praticiens/creer', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-
-    router.push('/praticiens')
-  } catch (e: unknown) {
-    const err = e as { response?: { data?: { error?: string } } }
-    setError(err?.response?.data?.error || 'Erreur lors de la création')
-  } finally {
-    setSaving(false)
+    if (!validate()) return
+    setSaving(true); setError('')
+    try {
+      const zoneIntervention = modeZone === 'region' ? [regionSelectionnee] : departementsSelectionnes
+      const formData = new FormData()
+      formData.append('prenom', prenom)
+      formData.append('nom', nom)
+      formData.append('telephone', telephone.replace(/\s/g, ''))
+      formData.append('specialite', specialite)
+      formData.append('numeroOrdre', numeroOrdre)
+      formData.append('anneesExperience', anneesExp || '0')
+      formData.append('bio', bio)
+      formData.append('zoneIntervention', JSON.stringify(zoneIntervention))
+      formData.append('moyensPaiement', JSON.stringify(moyensPaiement))
+      formData.append('accepteEspeces', String(accepteEspeces))
+      formData.append('documentsTypes', JSON.stringify(documents.map(d => d.type)))
+      documents.forEach(doc => formData.append('files', doc.file))
+      await api.post('/praticiens/creer', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+      router.push('/praticiens')
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { error?: string } } }
+      setError(err?.response?.data?.error || 'Erreur lors de la création')
+    } finally { setSaving(false) }
   }
-}
+
   return (
     <div className="flex flex-col h-full">
       <Topbar title="Ajouter un praticien">
         <button onClick={() => router.push('/praticiens')} className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
           Annuler
         </button>
-        <button
-          onClick={handleSubmit}
-          disabled={saving}
-          className="text-xs font-bold bg-[#22c55e] text-white rounded-lg px-3 py-1.5 hover:bg-[#16a34a] transition disabled:opacity-50"
-        >
+        <button onClick={handleSubmit} disabled={saving}
+          className="text-xs font-bold bg-[#22c55e] text-white rounded-lg px-3 py-1.5 hover:bg-[#16a34a] transition disabled:opacity-50">
           {saving ? 'Création...' : 'Créer le praticien'}
         </button>
       </Topbar>
 
-      <div className="flex-1 overflow-y-auto p-6">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mb-5">
           <h1 className="font-extrabold text-xl text-gray-900 tracking-tight">Nouveau praticien</h1>
           <p className="text-sm text-gray-400 mt-0.5">Le praticien sera en attente de validation avant de pouvoir exercer.</p>
         </div>
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-5">{error}</div>
-        )}
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3 mb-5">{error}</div>}
 
         <div className="space-y-5 max-w-4xl">
 
-          {/* Informations personnelles */}
+          {/* ─── Informations personnelles ─── */}
           <div className="bg-white border border-gray-100 rounded-xl p-5">
             <h2 className="text-sm font-bold text-gray-800 mb-4">Informations personnelles</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Prénom <span className="text-red-500">*</span></label>
-                <input value={prenom} onChange={e => setPrenom(e.target.value)} type="text" className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors.prenom ? 'border-red-300' : 'border-gray-200'}`} />
-                {errors.prenom && <p className="text-xs text-red-500 mt-1">{errors.prenom}</p>}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nom <span className="text-red-500">*</span></label>
-                <input value={nom} onChange={e => setNom(e.target.value)} type="text" className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors.nom ? 'border-red-300' : 'border-gray-200'}`} />
-                {errors.nom && <p className="text-xs text-red-500 mt-1">{errors.nom}</p>}
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Téléphone <span className="text-red-500">*</span></label>
-                <input value={telephone} onChange={e => setTelephone(e.target.value)} type="tel" placeholder="+221 77 000 00 00" className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors.telephone ? 'border-red-300' : 'border-gray-200'}`} />
-                {errors.telephone
-                  ? <p className="text-xs text-red-500 mt-1">{errors.telephone}</p>
-                  : <p className="text-xs text-gray-400 mt-1">Format : +221 suivi de 70/75/76/77/78 + 7 chiffres</p>
-                }
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Spécialité <span className="text-red-500">*</span></label>
-                <select value={specialite} onChange={e => setSpecialite(e.target.value)} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Field label="Prénom" required error={errors.prenom}>
+                <input value={prenom} onChange={e => setPrenom(e.target.value)} type="text" className={inputCls(errors.prenom)} />
+              </Field>
+              <Field label="Nom" required error={errors.nom}>
+                <input value={nom} onChange={e => setNom(e.target.value)} type="text" className={inputCls(errors.nom)} />
+              </Field>
+              <Field label="Téléphone" required error={errors.telephone} hint="Format : +221 suivi de 70/75/76/77/78 + 7 chiffres">
+                <input value={telephone} onChange={e => setTelephone(e.target.value)} type="tel" placeholder="+221 77 000 00 00" className={inputCls(errors.telephone)} />
+              </Field>
+              <Field label="Spécialité" required>
+                <select value={specialite} onChange={e => setSpecialite(e.target.value)} className={inputCls() + ' appearance-none'}>
                   {SPECIALITES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                 </select>
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Numéro d'ordre professionnel</label>
-                <input value={numeroOrdre} onChange={e => setNumeroOrdre(e.target.value)} type="text" placeholder="Ex : INF-SN-2020-04821" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Années d'expérience</label>
-                <input value={anneesExp} onChange={e => setAnneesExp(e.target.value)} type="number" min="0" placeholder="0" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068]" />
-              </div>
-              <div className="col-span-2">
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Biographie</label>
-                <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} placeholder="Présentation du praticien..." className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] resize-none" />
+              </Field>
+              <Field label="Numéro d'ordre professionnel">
+                <input value={numeroOrdre} onChange={e => setNumeroOrdre(e.target.value)} type="text" placeholder="Ex : INF-SN-2020-04821" className={inputCls()} />
+              </Field>
+              <Field label="Années d'expérience">
+                <input value={anneesExp} onChange={e => setAnneesExp(e.target.value)} type="number" min="0" placeholder="0" className={inputCls()} />
+              </Field>
+              <div className="sm:col-span-2">
+                <Field label="Biographie">
+                  <textarea value={bio} onChange={e => setBio(e.target.value)} rows={3} placeholder="Présentation du praticien..." className={inputCls() + ' resize-none'} />
+                </Field>
               </div>
             </div>
           </div>
 
-          {/* Zone d'intervention */}
+          {/* ─── Zone d'intervention ─── */}
           <div className="bg-white border border-gray-100 rounded-xl p-5">
-            <h2 className="text-sm font-bold text-gray-800 mb-4">Zone d'intervention <span className="text-red-500">*</span></h2>
-
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-gray-500 mb-1.5">Région</label>
+            <h2 className="text-sm font-bold text-gray-800 mb-4">Zone d&apos;intervention <span className="text-red-500">*</span></h2>
+            <Field label="Région" required error={errors.zone}>
               <select
                 value={regionSelectionnee}
                 onChange={e => { setRegionSelectionnee(e.target.value); setDepartementsSelectionnes([]); setModeZone('region') }}
-                className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none ${errors.zone ? 'border-red-300' : 'border-gray-200'}`}
+                className={inputCls(errors.zone) + ' appearance-none'}
               >
                 <option value="">Choisir une région...</option>
                 {REGIONS_SENEGAL.map(r => <option key={r.code} value={r.nom}>{r.nom}</option>)}
               </select>
-              {errors.zone && <p className="text-xs text-red-500 mt-1">{errors.zone}</p>}
-            </div>
+            </Field>
 
             {region && (
-              <>
-                <div className="flex gap-3 mb-4">
+              <div className="mt-4">
+                <div className="flex flex-wrap gap-2 mb-4">
                   <button
                     onClick={() => { setModeZone('region'); setDepartementsSelectionnes([]) }}
                     className={`text-xs font-semibold px-3 py-1.5 rounded-lg border transition ${modeZone === 'region' ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
@@ -266,25 +238,21 @@ export default function AjouterPraticienPage() {
                     Choisir des départements
                   </button>
                 </div>
-
                 {modeZone === 'departements' && (
                   <div className="flex flex-wrap gap-2">
                     {region.departements.map(dep => (
-                      <button
-                        key={dep}
-                        onClick={() => toggleDepartement(dep)}
-                        className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${departementsSelectionnes.includes(dep) ? 'bg-[#22c55e] text-white border-[#22c55e]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
-                      >
+                      <button key={dep} onClick={() => toggleDepartement(dep)}
+                        className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${departementsSelectionnes.includes(dep) ? 'bg-[#22c55e] text-white border-[#22c55e]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}>
                         {dep}
                       </button>
                     ))}
                   </div>
                 )}
-              </>
+              </div>
             )}
           </div>
 
-          {/* Moyens de paiement */}
+          {/* ─── Moyens de paiement ─── */}
           <div className="bg-white border border-gray-100 rounded-xl p-5">
             <h2 className="text-sm font-bold text-gray-800 mb-1">Moyens de paiement <span className="text-red-500">*</span></h2>
             <p className="text-xs text-gray-400 mb-4">Au moins un moyen de paiement requis</p>
@@ -294,41 +262,37 @@ export default function AjouterPraticienPage() {
               {OPERATEURS_MM.map(op => {
                 const selected = !!moyensPaiement.find(m => m.operateur === op.value)
                 return (
-                  <button
-                    key={op.value}
+                  <button key={op.value}
                     onClick={() => selected ? removeMoyenPaiement(op.value) : addMoyenPaiement(op.value)}
-                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${selected ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
-                  >
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${selected ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}>
                     {selected ? '✓ ' : ''}{op.label}
                   </button>
                 )
               })}
-              <button
-                onClick={() => setAccepteEspeces(!accepteEspeces)}
-                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${accepteEspeces ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}
-              >
+              <button onClick={() => setAccepteEspeces(!accepteEspeces)}
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition ${accepteEspeces ? 'bg-[#0d5068] text-white border-[#0d5068]' : 'border-gray-200 text-gray-600 hover:border-[#0d5068]'}`}>
                 {accepteEspeces ? '✓ ' : ''}Espèces
               </button>
             </div>
 
-            {moyensPaiement.map(m => (
-              <div key={m.operateur} className="flex items-center gap-3 mb-3">
-                <span className="text-xs font-semibold text-gray-600 w-28 flex-shrink-0">{m.operateur}</span>
-                <div className="flex-1">
-                  <input
-                    value={m.numero}
-                    onChange={e => updateNumeroMM(m.operateur, e.target.value)}
-                    type="tel"
-                    placeholder="+221 77 000 00 00"
-                    className={`w-full border rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] ${errors[`mm_${m.operateur}`] ? 'border-red-300' : 'border-gray-200'}`}
-                  />
-                  {errors[`mm_${m.operateur}`] && <p className="text-xs text-red-500 mt-1">{errors[`mm_${m.operateur}`]}</p>}
-                </div>
+            {moyensPaiement.length > 0 && (
+              <div className="space-y-3">
+                {moyensPaiement.map(m => (
+                  <div key={m.operateur} className="flex flex-col sm:flex-row sm:items-center gap-2">
+                    <span className="text-xs font-semibold text-gray-600 sm:w-28 flex-shrink-0">{m.operateur}</span>
+                    <div className="flex-1">
+                      <input value={m.numero} onChange={e => updateNumeroMM(m.operateur, e.target.value)}
+                        type="tel" placeholder="+221 77 000 00 00"
+                        className={inputCls(errors[`mm_${m.operateur}`])} />
+                      {errors[`mm_${m.operateur}`] && <p className="text-xs text-red-500 mt-1">{errors[`mm_${m.operateur}`]}</p>}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
 
-          {/* Documents de vérification */}
+          {/* ─── Documents ─── */}
           <div className="bg-white border border-gray-100 rounded-xl p-5">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-sm font-bold text-gray-800">Documents de vérification</h2>
@@ -338,12 +302,9 @@ export default function AjouterPraticienPage() {
             </div>
             <p className="text-xs text-gray-400 mb-4">Diplôme, CNI, casier judiciaire...</p>
 
-            <div className="flex items-center gap-3 mb-4">
-              <select
-                value={docType}
-                onChange={e => setDocType(e.target.value)}
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none"
-              >
+            <div className="flex flex-wrap items-center gap-3 mb-4">
+              <select value={docType} onChange={e => setDocType(e.target.value)}
+                className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-[#0d5068] appearance-none">
                 {TYPES_DOCUMENT.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
               <label className="flex items-center gap-2 text-xs font-bold bg-[#0d5068] text-white rounded-lg px-3 py-2 cursor-pointer hover:bg-[#0a3f52] transition">
@@ -357,16 +318,24 @@ export default function AjouterPraticienPage() {
               <div className="space-y-2">
                 {documents.map((doc, i) => (
                   <div key={i} className="flex items-center gap-3 bg-gray-50 rounded-lg px-3 py-2">
-                    <div className="w-6 h-6 rounded bg-[#0d5068]/10 flex items-center justify-center text-xs">📄</div>
+                    <div className="w-6 h-6 rounded bg-[#0d5068]/10 flex items-center justify-center text-xs flex-shrink-0">📄</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-semibold text-gray-700 truncate">{doc.nom}</p>
                       <p className="text-[10px] text-gray-400">{TYPES_DOCUMENT.find(t => t.value === doc.type)?.label}</p>
                     </div>
-                    <button onClick={() => removeDoc(i)} className="text-xs text-red-500 hover:text-red-700 font-semibold">Retirer</button>
+                    <button onClick={() => removeDoc(i)} className="text-xs text-red-500 hover:text-red-700 font-semibold flex-shrink-0">Retirer</button>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Bouton submit mobile */}
+          <div className="md:hidden pb-4">
+            <button onClick={handleSubmit} disabled={saving}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white bg-[#22c55e] hover:bg-[#16a34a] transition disabled:opacity-50">
+              {saving ? 'Création en cours...' : 'Créer le praticien'}
+            </button>
           </div>
 
         </div>

@@ -17,7 +17,7 @@ interface Mission {
   adresseTexte: string
   montantTotal: number
   createdAt: string
-  paiement: { statut: string } | null
+  paiements: { statut: string }[]
   praticien: { user: { nom: string; prenom: string } } | null
 }
 

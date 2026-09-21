@@ -31,7 +31,7 @@ interface Mission {
   urgence: boolean
   patient: { nom: string; prenom: string }
   createdAt: string
-  paiement: { statut: string } | null
+  paiements: { statut: string }[]
 }
 
 const SPEC_LABEL: Record<string, string> = {
