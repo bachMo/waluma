@@ -17,6 +17,9 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.waluma.app",
       "buildNumber": "1",
+      "config": {
+        "googleMapsApiKey": "$EXPO_PUBLIC_GOOGLE_MAPS_KEY"
+      },
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Waluma utilise votre position pour trouver le praticien de santé le plus proche de vous.",
         "NSLocationAlwaysUsageDescription": "Waluma utilise votre position pour suivre votre mission de soin en temps réel.",
@@ -55,6 +58,11 @@
       },
       "package": "com.waluma.app",
       "versionCode": 1,
+      "config": {
+        "googleMaps": {
+          "apiKey": "$EXPO_PUBLIC_GOOGLE_MAPS_KEY"
+        }
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
