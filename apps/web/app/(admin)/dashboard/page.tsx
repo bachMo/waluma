@@ -13,7 +13,7 @@ interface Stats {
   totalPatients: number
   revenuTotal: number
   missionsParJour: { date: string; count: number }[]
-  topPraticiens: { nom: string; missions: number; note: number; specialite: string }[]
+  topPraticiens: { nom: string; missions: number; note: number | null; specialite: string }[]
   repartitionSpecialites: { label: string; count: number }[]
 }
 
@@ -234,10 +234,16 @@ export default function DashboardPage() {
                     <div className="text-[10.5px] text-gray-400">missions</div>
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="#f59e0b">
-                      <path d="M5 1l1.2 2.5L9 4l-2 1.9.5 2.6L5 7.3 2.5 8.5 3 5.9 1 4l2.8-.5L5 1z"/>
-                    </svg>
-                    <span className="text-[11.5px] font-semibold text-gray-600">{p.note.toFixed(1)}</span>
+                    {typeof p.note === 'number' ? (
+                      <>
+                        <svg width="10" height="10" viewBox="0 0 10 10" fill="#f59e0b">
+                          <path d="M5 1l1.2 2.5L9 4l-2 1.9.5 2.6L5 7.3 2.5 8.5 3 5.9 1 4l2.8-.5L5 1z"/>
+                        </svg>
+                        <span className="text-[11.5px] font-semibold text-gray-600">{p.note.toFixed(1)}</span>
+                      </>
+                    ) : (
+                      <span className="text-[11px] text-gray-400">pas encore noté</span>
+                    )}
                   </div>
                 </div>
               ))

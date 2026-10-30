@@ -46,7 +46,7 @@ interface Praticien {
   missionsRefusees: number; tauxAcceptation: number | null; createdAt: string
   user: { nom: string; prenom: string; telephone: string }
   specialites: { specialite: string; principale: boolean }[]
-  documents: Document[]
+  documents?: Document[] | null
 }
 
 const statutVariant: Record<string, 'teal' | 'amber' | 'red' | 'gray'> = {
@@ -238,7 +238,9 @@ export default function PraticienDetailPage() {
                 )}
                 <span className="text-xs text-gray-400">{praticien.user.telephone}</span>
                 <span className="text-xs text-gray-400">· {praticien.totalMissions} missions</span>
-                {praticien.noteMoyenne && <span className="text-xs font-semibold text-yellow-500">★ {praticien.noteMoyenne.toFixed(1)}</span>}
+                {typeof praticien.noteMoyenne === 'number' && (
+                  <span className="text-xs font-semibold text-yellow-500">★ {praticien.noteMoyenne.toFixed(1)}</span>
+                )}
               </div>
             </div>
           </div>
@@ -287,7 +289,7 @@ export default function PraticienDetailPage() {
         <div className="flex gap-1 mb-5 border-b border-gray-100 overflow-x-auto">
           {[
             { key: 'infos', label: 'Informations' },
-            { key: 'documents', label: `Documents (${praticien.documents.length})` },
+            { key: 'documents', label: `Documents (${(praticien.documents?.length ?? 0)})` },
             { key: 'paiements', label: `Impayés (${missionsImpayees.length})`, alert: missionsImpayees.length > 0 },
           ].map(tab => (
             <button
@@ -379,8 +381,8 @@ export default function PraticienDetailPage() {
                   { label: 'Total missions', value: praticien.totalMissions },
                   { label: 'Missions refusées', value: praticien.missionsRefusees },
                   { label: "Taux d'acceptation", value: praticien.tauxAcceptation ? `${Math.round(praticien.tauxAcceptation * 100)}%` : '—' },
-                  { label: 'Note moyenne', value: praticien.noteMoyenne ? `★ ${praticien.noteMoyenne.toFixed(1)}` : '—' },
-                  { label: 'Documents', value: praticien.documents.length },
+                  { label: 'Note moyenne', value: typeof praticien.noteMoyenne === 'number' ? `★ ${praticien.noteMoyenne.toFixed(1)}` : '—' },
+                  { label: 'Documents', value: (praticien.documents?.length ?? 0) },
                   { label: 'Membre depuis', value: new Date(praticien.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' }) },
                 ].map(item => (
                   <div key={item.label} className="flex justify-between items-center py-2 border-b border-gray-50 last:border-b-0">
@@ -414,7 +416,7 @@ export default function PraticienDetailPage() {
               </div>
             </div>
 
-            {praticien.documents.length === 0 ? (
+            {(praticien.documents?.length ?? 0) === 0 ? (
               <div className="text-center py-12 text-sm text-gray-400">Aucun document uploadé</div>
             ) : (
               <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
@@ -429,7 +431,7 @@ export default function PraticienDetailPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {praticien.documents.map(doc => (
+                      {(praticien.documents ?? []).map(doc => (
                         <tr key={doc.id} className="border-b border-gray-50 hover:bg-gray-50 transition">
                           <td className="px-4 py-3 font-semibold text-gray-900 text-[13px]">{typeDocumentLabel[doc.type] ?? doc.type}</td>
                           <td className="px-4 py-3">
@@ -457,7 +459,7 @@ export default function PraticienDetailPage() {
 
                 {/* Cards mobile */}
                 <div className="md:hidden divide-y divide-gray-50">
-                  {praticien.documents.map(doc => (
+                  {(praticien.documents ?? []).map(doc => (
                     <div key={doc.id} className="p-4">
                       <div className="flex items-start justify-between mb-2">
                         <div>

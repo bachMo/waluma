@@ -13,7 +13,7 @@ interface Praticien {
   specialite: string
   statut: 'ACTIF' | 'INACTIF' | 'SUSPENDU' | 'EN_ATTENTE'
   missionsTotal: number
-  note: number
+  note: number | null
   createdAt: string
 }
 
@@ -154,10 +154,16 @@ export default function PraticiensPage() {
                         <td className="px-4 py-3.5 text-[13px] font-semibold text-[#0a2535]">{p.missionsTotal}</td>
                         <td className="px-4 py-3.5">
                           <div className="flex items-center gap-1">
-                            <svg width="10" height="10" viewBox="0 0 10 10" fill="#f59e0b">
-                              <path d="M5 1l1.2 2.5L9 4l-2 1.9.5 2.6L5 7.3 2.5 8.5 3 5.9 1 4l2.8-.5L5 1z"/>
-                            </svg>
-                            <span className="text-[12.5px] font-semibold text-gray-700">{p.note.toFixed(1)}</span>
+                            {typeof p.note === 'number' ? (
+                              <>
+                                <svg width="10" height="10" viewBox="0 0 10 10" fill="#f59e0b">
+                                  <path d="M5 1l1.2 2.5L9 4l-2 1.9.5 2.6L5 7.3 2.5 8.5 3 5.9 1 4l2.8-.5L5 1z"/>
+                                </svg>
+                                <span className="text-[12.5px] font-semibold text-gray-700">{p.note.toFixed(1)}</span>
+                              </>
+                            ) : (
+                              <span className="text-[12px] text-gray-400">—</span>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3.5">
