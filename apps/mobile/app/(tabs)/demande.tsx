@@ -3,9 +3,10 @@ import {
   StyleSheet, SafeAreaView, TextInput, Alert, ActivityIndicator
 } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import * as Location from 'expo-location'
+import { Ionicons } from '@expo/vector-icons'
 import api from '@/lib/api'
-import { useEffect } from 'react'
 
 const SPECIALITES = [
   { key: 'INFIRMIER', label: 'Soins infirmiers', prix: 8000, emoji: '💉' },
@@ -23,6 +24,8 @@ export default function DemandeScreen() {
   const [note, setNote] = useState('')
   const [urgence, setUrgence] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [locLoading, setLocLoading] = useState(false)
+  const [coords, setCoords] = useState<{ latitude: number; longitude: number } | null>(null)
 
   useEffect(() => {
   if (params.specialite) {
@@ -32,6 +35,30 @@ export default function DemandeScreen() {
 
   const selected = SPECIALITES.find(s => s.key === specialite)
   const montantTotal = selected ? selected.prix + 2500 : 0
+
+  async function handleGeolocate() {
+    setLocLoading(true)
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission refusée', 'Activez la localisation dans les paramètres')
+        return
+      }
+      const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+      const { latitude, longitude } = loc.coords
+      setCoords({ latitude, longitude })
+      // Géocodage inversé pour remplir le texte
+      const [place] = await Location.reverseGeocodeAsync({ latitude, longitude })
+      if (place) {
+        const parts = [place.streetNumber, place.street, place.district, place.city].filter(Boolean)
+        setAdresse(parts.join(', ') || `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`)
+      }
+    } catch {
+      Alert.alert('Erreur', 'Impossible d\'obtenir votre position')
+    } finally {
+      setLocLoading(false)
+    }
+  }
 
   async function handleSubmit() {
     if (!specialite) {
@@ -47,6 +74,8 @@ export default function DemandeScreen() {
       const { data } = await api.post('/missions', {
         specialite,
         adresseTexte: adresse,
+        latitude: coords?.latitude ?? null,
+        longitude: coords?.longitude ?? null,
         notePatient: note,
         urgence,
         type: 'IMMEDIATE',
@@ -98,10 +127,22 @@ export default function DemandeScreen() {
           <TextInput
             style={s.input}
             value={adresse}
-            onChangeText={setAdresse}
+            onChangeText={(v) => { setAdresse(v); if (v !== adresse) setCoords(null) }}
             placeholder="Ex : Villa 12, Almadies, Dakar"
             multiline
           />
+          <TouchableOpacity style={s.geoBtn} onPress={handleGeolocate} disabled={locLoading}>
+            {locLoading
+              ? <ActivityIndicator color="#0d5068" size="small" />
+              : <><Ionicons name="locate" size={16} color="#0d5068" /><Text style={s.geoBtnText}>Ma position</Text></>
+            }
+          </TouchableOpacity>
+          {coords && (
+            <View style={s.coordsBadge}>
+              <Ionicons name="checkmark-circle" size={14} color="#22c55e" />
+              <Text style={s.coordsText}>Position GPS enregistrée</Text>
+            </View>
+          )}
         </View>
 
         {/* Note pour le praticien */}
@@ -240,4 +281,12 @@ const s = StyleSheet.create({
   },
   submitBtnDisabled: { opacity: 0.5 },
   submitText: { color: '#fff', fontWeight: '700', fontSize: 16 },
+  geoBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    marginTop: 8, alignSelf: 'flex-start',
+    backgroundColor: '#e0f2fe', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7,
+  },
+  geoBtnText: { fontSize: 13, fontWeight: '600', color: '#0d5068' },
+  coordsBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
+  coordsText: { fontSize: 12, color: '#22c55e', fontWeight: '600' },
 })

@@ -2,15 +2,18 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, SafeAreaView, Alert, ActivityIndicator,
   StatusBar, Linking, Modal, Platform,
-  KeyboardAvoidingView, TextInput, TouchableWithoutFeedback, Keyboard
+  KeyboardAvoidingView, TextInput, TouchableWithoutFeedback, Keyboard, Dimensions
 } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useState, useEffect, useRef } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps'
 import * as Location from 'expo-location'
 import api from '@/lib/api'
 import { connectSocket, emitPosition } from '@/lib/socket'
+
+const { width: SCREEN_W } = Dimensions.get('window')
 
 interface CompteRendu {
   acteRealise: string
@@ -90,7 +93,9 @@ export default function MissionScreen() {
   const [mission, setMission] = useState<Mission | null>(null)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [praticienPos, setPraticienPos] = useState<{ latitude: number; longitude: number } | null>(null)
   const locationSubRef = useRef<Location.LocationSubscription | null>(null)
+  const mapRef = useRef<MapView | null>(null)
 
   // Commission
   const [showCommissionModal, setShowCommissionModal] = useState(false)
@@ -131,7 +136,11 @@ export default function MissionScreen() {
         if (status === 'granted' && missionId) {
           const sub = await Location.watchPositionAsync(
             { accuracy: Location.Accuracy.High, timeInterval: 10000, distanceInterval: 10 },
-            (loc) => { emitPosition(missionId, loc.coords.latitude, loc.coords.longitude) }
+            (loc) => {
+              const { latitude, longitude } = loc.coords
+              emitPosition(missionId, latitude, longitude)
+              setPraticienPos({ latitude, longitude })
+            }
           )
           locationSubRef.current = sub
         }
@@ -279,6 +288,50 @@ export default function MissionScreen() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Carte praticien → patient (missions actives avec coordonnées) */}
+          {!STATUTS_TERMINES.includes(mission.statut) && mission.latitude && mission.longitude && (
+            <View style={s.mapWrapper}>
+              <MapView
+                ref={mapRef}
+                provider={PROVIDER_GOOGLE}
+                style={s.missionMap}
+                initialRegion={{
+                  latitude: mission.latitude,
+                  longitude: mission.longitude,
+                  latitudeDelta: praticienPos ? Math.abs(praticienPos.latitude - mission.latitude) * 2.5 + 0.01 : 0.015,
+                  longitudeDelta: praticienPos ? Math.abs(praticienPos.longitude - mission.longitude) * 2.5 + 0.01 : 0.015,
+                }}
+              >
+                {/* Marqueur patient */}
+                <Marker
+                  coordinate={{ latitude: mission.latitude, longitude: mission.longitude }}
+                  title={`${mission.patient.prenom} ${mission.patient.nom}`}
+                  description={mission.adresseTexte}
+                  pinColor="#0d5068"
+                />
+                {/* Marqueur praticien (ma position GPS) */}
+                {praticienPos && (
+                  <Marker coordinate={praticienPos} title="Ma position" pinColor="#22c55e" />
+                )}
+                {/* Trait entre moi et le patient */}
+                {praticienPos && (
+                  <Polyline
+                    coordinates={[praticienPos, { latitude: mission.latitude, longitude: mission.longitude }]}
+                    strokeColor="#7c3aed"
+                    strokeWidth={3}
+                    lineDashPattern={[8, 4]}
+                  />
+                )}
+              </MapView>
+              {!praticienPos && (
+                <View style={s.mapOverlay}>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text style={s.mapOverlayText}>Récupération de votre position…</Text>
+                </View>
+              )}
+            </View>
+          )}
 
           {mission.notePatient && (
             <View style={s.noteCard}>
@@ -688,4 +741,9 @@ const s = StyleSheet.create({
   modalInfoText: { flex: 1, fontSize: 12, color: '#0d5068', lineHeight: 17 },
   modalConfirmBtn: { backgroundColor: '#22c55e', borderRadius: 16, padding: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   modalConfirmText: { fontSize: 15, fontWeight: '700', color: '#fff' },
+  // Carte mission
+  mapWrapper: { marginHorizontal: 16, marginBottom: 8, borderRadius: 18, overflow: 'hidden', height: 200, position: 'relative' },
+  missionMap: { width: '100%', height: '100%' },
+  mapOverlay: { position: 'absolute', bottom: 10, left: 12, right: 12, backgroundColor: 'rgba(13,80,104,0.85)', borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
+  mapOverlayText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 })

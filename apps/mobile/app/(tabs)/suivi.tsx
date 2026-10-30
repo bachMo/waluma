@@ -1,14 +1,16 @@
 import {
   View, Text, ScrollView, TouchableOpacity,
   StyleSheet, ActivityIndicator, Alert,
-  KeyboardAvoidingView, Platform, TextInput, TouchableWithoutFeedback, Keyboard
+  KeyboardAvoidingView, Platform, TextInput, TouchableWithoutFeedback, Keyboard, Dimensions
 } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Ionicons } from '@expo/vector-icons'
 import { LinearGradient } from 'expo-linear-gradient'
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps'
 import { connectSocket, joinMission, leaveMission } from '@/lib/socket'
 import api from '@/lib/api'
+import type { Socket } from 'socket.io-client'
 
 interface CompteRendu {
   acteRealise: string
@@ -41,6 +43,8 @@ interface Mission {
   statut: string
   specialite: string
   adresseTexte: string
+  latitude: number | null
+  longitude: number | null
   montantTotal: number
   finSoinAt: string | null
   paiements: { statut: string; type: string }[]
@@ -49,6 +53,14 @@ interface Mission {
   avis: Avis[]
   litige: Litige | null
 }
+
+interface PositionPraticien {
+  latitude: number
+  longitude: number
+}
+
+const MAP_STATUTS = ['ACCEPTEE', 'EN_ROUTE', 'ARRIVE']
+const { width: SCREEN_W } = Dimensions.get('window')
 
 const STEPS = [
   { statut: 'ACCEPTEE', label: 'Praticien trouvé', icon: 'checkmark-circle' },
@@ -77,6 +89,9 @@ export default function SuiviScreen() {
   const { missionId } = useLocalSearchParams<{ missionId: string }>()
   const [mission, setMission] = useState<Mission | null>(null)
   const [loading, setLoading] = useState(true)
+  const [praticienPos, setPraticienPos] = useState<PositionPraticien | null>(null)
+  const socketRef = useRef<Socket | null>(null)
+  const mapRef = useRef<MapView | null>(null)
 
   // Avis
   const [showAvisForm, setShowAvisForm] = useState(false)
@@ -108,15 +123,37 @@ export default function SuiviScreen() {
     async function initSocket() {
       try {
         const sock = await connectSocket()
+        socketRef.current = sock
         joinMission(missionId)
         sock.on('mission:statut', (data: { missionId: string; statut: string }) => {
           if (data.missionId === missionId) load()
         })
+        sock.on('praticien:position', (data: { missionId: string; latitude: number; longitude: number }) => {
+          if (data.missionId === missionId) {
+            setPraticienPos({ latitude: data.latitude, longitude: data.longitude })
+          }
+        })
       } catch (e) { console.error('Socket error:', e) }
     }
     initSocket()
-    return () => { clearInterval(interval); leaveMission(missionId) }
+    return () => {
+      clearInterval(interval)
+      leaveMission(missionId)
+      socketRef.current?.off('praticien:position')
+    }
   }, [missionId])
+
+  // Recentrer la carte quand la position du praticien se met à jour
+  useEffect(() => {
+    if (praticienPos && mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: praticienPos.latitude,
+        longitude: praticienPos.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      }, 800)
+    }
+  }, [praticienPos])
 
   async function handleAnnuler() {
     Alert.alert('Annuler la mission', 'Voulez-vous vraiment annuler cette demande de soin ?', [
@@ -183,6 +220,57 @@ export default function SuiviScreen() {
           <View style={{ width: 36 }} />
         </View>
       </LinearGradient>
+
+      {/* Carte temps réel praticien → patient */}
+      {MAP_STATUTS.includes(mission.statut) && (
+        <View style={s.mapContainer}>
+          {mission.latitude && mission.longitude ? (
+            <MapView
+              ref={mapRef}
+              provider={PROVIDER_GOOGLE}
+              style={s.map}
+              initialRegion={{
+                latitude: mission.latitude,
+                longitude: mission.longitude,
+                latitudeDelta: 0.015,
+                longitudeDelta: 0.015,
+              }}
+              showsUserLocation={false}
+              showsMyLocationButton={false}
+            >
+              {/* Marqueur patient (position de la demande) */}
+              <Marker
+                coordinate={{ latitude: mission.latitude, longitude: mission.longitude }}
+                title="Votre adresse"
+                pinColor="#0d5068"
+              />
+              {/* Marqueur praticien (position temps réel) */}
+              {praticienPos && (
+                <Marker
+                  coordinate={praticienPos}
+                  title="Praticien"
+                  pinColor="#22c55e"
+                />
+              )}
+              {/* Trait entre praticien et patient */}
+              {praticienPos && (
+                <Polyline
+                  coordinates={[praticienPos, { latitude: mission.latitude, longitude: mission.longitude }]}
+                  strokeColor="#22c55e"
+                  strokeWidth={3}
+                  lineDashPattern={[8, 4]}
+                />
+              )}
+            </MapView>
+          ) : null}
+          {mission.statut === 'EN_ROUTE' && !praticienPos && (
+            <View style={s.mapOverlay}>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text style={s.mapOverlayText}>Localisation du praticien…</Text>
+            </View>
+          )}
+        </View>
+      )}
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView style={s.body} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -585,4 +673,9 @@ const s = StyleSheet.create({
   detailLabel: { fontSize: 13, color: '#888780' },
   detailVal: { fontSize: 13, color: '#1a1a18', fontWeight: '600', textAlign: 'right', flex: 1 },
   detailValGreen: { color: '#22c55e', fontSize: 14, fontWeight: '800' },
+  // Carte temps réel
+  mapContainer: { width: SCREEN_W, height: 220, position: 'relative' },
+  map: { width: '100%', height: '100%' },
+  mapOverlay: { position: 'absolute', bottom: 10, left: 16, right: 16, backgroundColor: 'rgba(13,80,104,0.85)', borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 14, paddingVertical: 8 },
+  mapOverlayText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 })
