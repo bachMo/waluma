@@ -1,334 +1,250 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import Topbar from '@/components/admin/Topbar'
 import StatCard from '@/components/ui/StatCard'
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-} from 'recharts'
+import Badge from '@/components/ui/Badge'
 import api from '@/lib/api'
-import Link from 'next/link'
 
-const specialiteLabel: Record<string, string> = {
-  INFIRMIER: 'Soins infirmiers',
-  MEDECIN_GENERALISTE: 'Médecine générale',
-  SAGE_FEMME: 'Sage-femme',
-  KINESITHERAPEUTE: 'Kinésithérapie',
-  PRELEVEUR: 'Prélèvement',
-  PEDIATRE: 'Pédiatrie',
-  AUTRE: 'Autres',
+interface Stats {
+  totalPraticiens: number
+  totalMissions: number
+  totalPatients: number
+  revenuTotal: number
+  missionsParJour: { date: string; count: number }[]
+  topPraticiens: { nom: string; missions: number; note: number; specialite: string }[]
+  repartitionSpecialites: { label: string; count: number }[]
 }
 
-const specialiteColor: Record<string, string> = {
-  INFIRMIER: '#22c55e',
-  MEDECIN_GENERALISTE: '#0d5068',
-  SAGE_FEMME: '#8b5cf6',
-  KINESITHERAPEUTE: '#f59e0b',
-  PRELEVEUR: '#ec4899',
-  PEDIATRE: '#06b6d4',
-  AUTRE: '#d1d5db',
-}
-
-interface DashboardData {
-  kpis: {
-    totalMissions: number
-    missionsActives: number
-    missionsCeMois: number
-    totalPraticiens: number
-    praticiensActifs: number
-    praticiensAValider: number
-    totalLitiges: number
-    litigesOuverts: number
-    totalPatients: number
-    volumeCeMois: number
-  }
-  topPraticiens: {
-    id: string
-    nom: string
-    missions: number
-    note: number | null
-    specialite: string
-  }[]
-  repartitionSpecialites: {
-    specialite: string
-    count: number
-  }[]
-  graphiqueMissions: {
-    jour: string
-    missions: number
-  }[]
+const MISSION_STATUTS: Record<string, { label: string; variant: 'amber' | 'blue' | 'green' | 'red' | 'gray' }> = {
+  EN_ATTENTE: { label: 'En attente', variant: 'amber' },
+  EN_COURS: { label: 'En cours', variant: 'blue' },
+  TERMINEE: { label: 'Terminée', variant: 'green' },
+  ANNULEE: { label: 'Annulée', variant: 'red' },
 }
 
 export default function DashboardPage() {
-  const [data, setData] = useState<DashboardData | null>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function load() {
-      try {
-        const { data: d } = await api.get('/stats/dashboard')
-        setData(d)
-      } finally {
-        setLoading(false)
-      }
+  const fetchStats = useCallback(async () => {
+    try {
+      const { data } = await api.get<Stats>('/stats/dashboard')
+      setStats(data)
+    } catch {
+      // keep previous data
+    } finally {
+      setLoading(false)
     }
-    load()
-    const interval = setInterval(load, 30000)
-    return () => clearInterval(interval)
   }, [])
 
-  const totalSpecialites = data?.repartitionSpecialites.reduce((s, r) => s + r.count, 0) || 1
+  useEffect(() => {
+    fetchStats()
+    const t = setInterval(fetchStats, 30_000)
+    return () => clearInterval(t)
+  }, [fetchStats])
+
+  const fmtNum = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
+  const fmtF = (n: number) => new Intl.NumberFormat('fr-FR').format(n) + ' F'
 
   return (
-    <div className="flex flex-col h-full min-w-0">
-      <Topbar title="Tableau de bord">
-        <div className="flex items-center gap-2">
-          <span className="hidden sm:flex items-center gap-1.5 text-[11px] text-gray-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            Mis à jour toutes les 30s
-          </span>
-          <button
-            type="button"
-            className="text-[12px] font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition-colors text-gray-600"
-          >
-            Exporter
-          </button>
-        </div>
-      </Topbar>
+    <div className="flex flex-col min-h-full">
+      <Topbar title="Dashboard" subtitle="Vue temps réel" />
 
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-5 lg:p-6">
+      <div className="flex-1 p-5 sm:p-6 space-y-6">
 
-        {/* ─── Header ─── */}
-        <div className="mb-6">
-          <h2 className="font-extrabold text-[18px] sm:text-[20px] text-gray-900 tracking-tight">
-            Vue d&apos;ensemble
-          </h2>
-          <p className="text-[13px] text-gray-400 mt-0.5">Dakar, Sénégal</p>
-        </div>
-
-        {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <div className="w-8 h-8 rounded-full border-2 border-[#0d5068] border-t-transparent animate-spin" />
-            <span className="text-[13px] text-gray-400">Chargement des données…</span>
-          </div>
-        ) : (
-          <>
-            {/* ─── Banner missions actives ─── */}
-            {(data?.kpis.missionsActives ?? 0) > 0 && (
-              <Link href="/missions" className="block mb-5">
-                <div className="bg-[#0d5068] rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-[#0a3f52] transition-colors cursor-pointer">
-                  <div className="w-2 h-2 rounded-full bg-[#4ade80] animate-pulse flex-shrink-0" />
-                  <span className="text-white text-[13px] font-medium flex-1">
-                    <strong className="text-[#4ade80]">
-                      {data?.kpis.missionsActives} mission{(data?.kpis.missionsActives ?? 0) > 1 ? 's' : ''} active{(data?.kpis.missionsActives ?? 0) > 1 ? 's' : ''}
-                    </strong>{' '}en ce moment
-                  </span>
-                  <span className="text-white/60 text-[12px] font-semibold whitespace-nowrap">Superviser →</span>
-                </div>
-              </Link>
-            )}
-
-            {/* ─── KPIs ─── */}
-            <div className="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-5">
-              <StatCard
-                label="Missions ce mois"
-                value={data?.kpis.missionsCeMois ?? 0}
-                delta={`${data?.kpis.totalMissions ?? 0} au total`}
-                deltaUp
-                accent="#22c55e"
-              />
-              <StatCard
-                label="Volume FCFA"
-                value={data?.kpis.volumeCeMois ? data.kpis.volumeCeMois.toLocaleString('fr-FR') : '0'}
-                delta="Ce mois"
-                deltaUp
-                accent="#0d5068"
-              />
+        {/* KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          {loading ? (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-100 h-24 animate-pulse" />
+            ))
+          ) : (
+            <>
               <StatCard
                 label="Praticiens actifs"
-                value={data?.kpis.praticiensActifs ?? 0}
-                delta={`${data?.kpis.totalPraticiens ?? 0} au total`}
-                deltaUp
-                accent="#8b5cf6"
+                value={fmtNum(stats?.totalPraticiens ?? 0)}
+                delta={8}
+                sub="ce mois"
+                accent="#0d5068"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="6" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M1 14c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                    <path d="M12 7v4M10 9h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                }
               />
               <StatCard
-                label="Patients inscrits"
-                value={data?.kpis.totalPatients ?? 0}
-                delta="Total"
-                deltaUp
-                accent="#f59e0b"
+                label="Missions totales"
+                value={fmtNum(stats?.totalMissions ?? 0)}
+                delta={12}
+                sub="ce mois"
+                accent="#22c55e"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <rect x="2" y="1.5" width="12" height="13" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M5 5.5h6M5 8h6M5 10.5h4" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                }
               />
-            </div>
+              <StatCard
+                label="Patients"
+                value={fmtNum(stats?.totalPatients ?? 0)}
+                delta={5}
+                sub="ce mois"
+                accent="#6366f1"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <circle cx="8" cy="5" r="3.5" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M2 15c0-3.31 2.69-6 6-6s6 2.69 6 6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                  </svg>
+                }
+              />
+              <StatCard
+                label="Revenus"
+                value={fmtF(stats?.revenuTotal ?? 0)}
+                delta={18}
+                sub="ce mois"
+                accent="#f97316"
+                icon={
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <rect x="1" y="4" width="14" height="9" rx="2" stroke="currentColor" strokeWidth="1.4"/>
+                    <path d="M1 7.5h14" stroke="currentColor" strokeWidth="1.4"/>
+                    <circle cx="4.5" cy="11" r="1" fill="currentColor"/>
+                  </svg>
+                }
+              />
+            </>
+          )}
+        </div>
 
-            {/* ─── Graphiques ─── */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-5">
-              {/* Graphique missions */}
-              <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-[13px] font-bold text-gray-900">Missions par jour</div>
-                  <span className="text-[11px] text-gray-400">Ce mois</span>
-                </div>
-                {(data?.graphiqueMissions.length ?? 0) > 0 ? (
-                  <ResponsiveContainer width="100%" height={150}>
-                    <BarChart data={data?.graphiqueMissions} barSize={18} margin={{ top: 4, right: 4, left: -22, bottom: 0 }}>
-                      <XAxis dataKey="jour" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                      <YAxis hide />
-                      <Tooltip
-                        cursor={{ fill: '#f7f9fb' }}
-                        contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #f0f0f0', boxShadow: '0 2px 8px rgba(0,0,0,.06)' }}
-                      />
-                      <Bar dataKey="missions" fill="#22c55e" radius={[4, 4, 0, 0]} name="Missions" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-[150px] flex items-center justify-center text-[13px] text-gray-300">
-                    Aucune mission ce mois
-                  </div>
-                )}
+        {/* CHART + SIDE */}
+        <div className="grid lg:grid-cols-[1fr_280px] gap-4">
+          {/* Bar chart */}
+          <div className="bg-white rounded-xl border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <div className="text-[14px] font-bold text-[#0a2535]">Missions par jour</div>
+                <div className="text-[11.5px] text-gray-400 mt-0.5">30 derniers jours</div>
               </div>
-
-              {/* Répartition spécialités */}
-              <div className="bg-white border border-gray-100 rounded-xl p-4 sm:p-5 min-w-0">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="text-[13px] font-bold text-gray-900">Par spécialité</div>
-                  <span className="text-[11px] text-gray-400">{totalSpecialites} total</span>
-                </div>
-                {(data?.repartitionSpecialites.length ?? 0) > 0 ? (
-                  <div className="space-y-3">
-                    {data?.repartitionSpecialites.map((r) => {
-                      const pct = Math.round((r.count / totalSpecialites) * 100)
-                      return (
-                        <div key={r.specialite}>
-                          <div className="flex items-center justify-between gap-3 text-[11.5px] mb-1.5">
-                            <span className="text-gray-500 truncate">{specialiteLabel[r.specialite] ?? r.specialite}</span>
-                            <span className="font-semibold text-gray-800 whitespace-nowrap tabular-nums">{pct}% · {r.count}</span>
-                          </div>
-                          <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-500"
-                              style={{ width: `${pct}%`, backgroundColor: specialiteColor[r.specialite] ?? '#d1d5db' }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center h-20 text-[13px] text-gray-300">Aucune donnée</div>
-                )}
-              </div>
+              <Badge variant="teal">Temps réel</Badge>
             </div>
+            {loading ? (
+              <div className="h-48 bg-gray-50 rounded-lg animate-pulse" />
+            ) : (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={stats?.missionsParJour ?? []} barSize={8}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: '#9ca3af' }}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 10, fill: '#9ca3af' }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={28}
+                  />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                    cursor={{ fill: '#f0f7f5' }}
+                  />
+                  <Bar dataKey="count" fill="#0d5068" radius={[4, 4, 0, 0]} name="Missions" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
 
-            {/* ─── Actions / Top / Aperçu ─── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-
-              {/* Actions requises */}
-              <div className="bg-white border border-gray-100 rounded-xl p-4 min-w-0">
-                <div className="text-[11.5px] font-semibold text-gray-400 mb-3">Actions requises</div>
-                <div className="space-y-2">
-                  {(data?.kpis.praticiensAValider ?? 0) > 0 && (
-                    <Link href="/praticiens" className="block">
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 flex items-center gap-2 hover:bg-amber-100 transition-colors cursor-pointer">
-                        <div className="w-7 h-7 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <circle cx="7" cy="5" r="2.5" stroke="#d97706" strokeWidth="1.4"/>
-                            <path d="M2 13c0-2.76 2.24-5 5-5s5 2.24 5 5" stroke="#d97706" strokeWidth="1.4" strokeLinecap="round"/>
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[12px] font-semibold text-amber-800">
-                            {data?.kpis.praticiensAValider} praticien{(data?.kpis.praticiensAValider ?? 0) > 1 ? 's' : ''} à valider
-                          </div>
-                          <div className="text-[10.5px] text-amber-600">En attente de vérification</div>
-                        </div>
-                        <span className="text-amber-400 text-[11px]">→</span>
+          {/* Répartition spécialités */}
+          <div className="bg-white rounded-xl border border-gray-100 p-5">
+            <div className="text-[14px] font-bold text-[#0a2535] mb-1">Spécialités</div>
+            <div className="text-[11.5px] text-gray-400 mb-5">Répartition des missions</div>
+            {loading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-8 bg-gray-50 rounded animate-pulse" />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {(stats?.repartitionSpecialites ?? []).map((s) => {
+                  const total = (stats?.repartitionSpecialites ?? []).reduce((a, b) => a + b.count, 0)
+                  const pct = total ? Math.round((s.count / total) * 100) : 0
+                  return (
+                    <div key={s.label}>
+                      <div className="flex justify-between text-[12px] mb-1">
+                        <span className="text-gray-600 truncate max-w-[140px]">{s.label}</span>
+                        <span className="font-semibold text-[#0a2535]">{pct}%</span>
                       </div>
-                    </Link>
-                  )}
-
-                  {(data?.kpis.litigesOuverts ?? 0) > 0 && (
-                    <Link href="/litiges" className="block">
-                      <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 flex items-center gap-2 hover:bg-red-100 transition-colors cursor-pointer">
-                        <div className="w-7 h-7 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
-                          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                            <path d="M7 1.5L13 12H1L7 1.5z" stroke="#dc2626" strokeWidth="1.4" strokeLinejoin="round"/>
-                            <path d="M7 5.5v3" stroke="#dc2626" strokeWidth="1.4" strokeLinecap="round"/>
-                            <circle cx="7" cy="10" r="0.6" fill="#dc2626"/>
-                          </svg>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[12px] font-semibold text-red-800">
-                            {data?.kpis.litigesOuverts} litige{(data?.kpis.litigesOuverts ?? 0) > 1 ? 's' : ''} ouvert{(data?.kpis.litigesOuverts ?? 0) > 1 ? 's' : ''}
-                          </div>
-                          <div className="text-[10.5px] text-red-600">Nécessite votre attention</div>
-                        </div>
-                        <span className="text-red-400 text-[11px]">→</span>
+                      <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-[#0d5068] rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
                       </div>
-                    </Link>
-                  )}
-
-                  {(data?.kpis.praticiensAValider ?? 0) === 0 && (data?.kpis.litigesOuverts ?? 0) === 0 && (
-                    <div className="bg-green-50 border border-green-100 rounded-lg px-3 py-2.5 flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                        <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                          <path d="M2 6l3 3 5-5" stroke="#16a34a" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                      </div>
-                      <div className="text-[12px] text-green-700 font-medium">Tout est nominal</div>
                     </div>
-                  )}
-                </div>
+                  )
+                })}
               </div>
+            )}
+          </div>
+        </div>
 
-              {/* Top praticiens */}
-              <div className="bg-white border border-gray-100 rounded-xl p-4 min-w-0">
-                <div className="text-[11.5px] font-semibold text-gray-400 mb-3">Top praticiens</div>
-                {(data?.topPraticiens.length ?? 0) > 0 ? (
-                  <div className="space-y-2.5">
-                    {data?.topPraticiens.map((p, i) => (
-                      <div key={p.id ?? `praticien-${i}`} className="flex items-center gap-2.5 min-w-0">
-                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${
-                          i === 0 ? 'bg-amber-100 text-amber-700' :
-                          i === 1 ? 'bg-gray-100 text-gray-600' :
-                          'bg-orange-50 text-orange-600'
-                        }`}>
-                          {i + 1}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[12.5px] font-semibold text-gray-800 truncate">{p.nom}</div>
-                          <div className="text-[10.5px] text-gray-400">{p.missions} mission{p.missions > 1 ? 's' : ''}</div>
-                        </div>
-                        {p.note !== null && (
-                          <span className="text-[11.5px] font-semibold text-amber-500 whitespace-nowrap">★ {p.note.toFixed(1)}</span>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-[12px] text-gray-300 text-center py-4">Aucune donnée</div>
-                )}
-              </div>
-
-              {/* Aperçu global */}
-              <div className="bg-white border border-gray-100 rounded-xl p-4 min-w-0 md:col-span-2 xl:col-span-1">
-                <div className="text-[11.5px] font-semibold text-gray-400 mb-3">Aperçu global</div>
-                <div className="space-y-2">
-                  {[
-                    { label: 'Total missions', value: data?.kpis.totalMissions ?? 0 },
-                    { label: 'Litiges total', value: data?.kpis.totalLitiges ?? 0 },
-                    { label: 'Praticiens total', value: data?.kpis.totalPraticiens ?? 0 },
-                    { label: 'Patients inscrits', value: data?.kpis.totalPatients ?? 0 },
-                  ].map((item) => (
-                    <div key={item.label} className="flex items-center justify-between py-2 border-b border-gray-50 last:border-0">
-                      <span className="text-[12.5px] text-gray-500">{item.label}</span>
-                      <span className="text-[13px] font-bold text-gray-900 tabular-nums">{item.value.toLocaleString('fr-FR')}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
+        {/* TOP PRATICIENS */}
+        <div className="bg-white rounded-xl border border-gray-100">
+          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+            <div>
+              <div className="text-[14px] font-bold text-[#0a2535]">Top praticiens</div>
+              <div className="text-[11.5px] text-gray-400 mt-0.5">Ce mois · classés par missions</div>
             </div>
-          </>
-        )}
+          </div>
+          <div className="divide-y divide-gray-50">
+            {loading ? (
+              Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="px-5 py-3.5 flex items-center gap-4">
+                  <div className="w-8 h-8 bg-gray-100 rounded-lg animate-pulse flex-shrink-0" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3.5 bg-gray-100 rounded animate-pulse w-36" />
+                    <div className="h-2.5 bg-gray-50 rounded animate-pulse w-20" />
+                  </div>
+                  <div className="h-3 bg-gray-100 rounded animate-pulse w-16" />
+                </div>
+              ))
+            ) : (
+              (stats?.topPraticiens ?? []).map((p, idx) => (
+                <div key={p.nom} className="px-5 py-3.5 flex items-center gap-4 hover:bg-gray-50/50 transition-colors">
+                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold flex-shrink-0 ${
+                    idx === 0 ? 'bg-amber-50 text-amber-600' :
+                    idx === 1 ? 'bg-gray-100 text-gray-500' :
+                    idx === 2 ? 'bg-orange-50 text-orange-500' :
+                    'bg-gray-50 text-gray-400'
+                  }`}>
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[13px] font-semibold text-[#0a2535] truncate">{p.nom}</div>
+                    <div className="text-[11px] text-gray-400">{p.specialite}</div>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-[13px] font-bold text-[#0a2535]">{p.missions}</div>
+                    <div className="text-[10.5px] text-gray-400">missions</div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="#f59e0b">
+                      <path d="M5 1l1.2 2.5L9 4l-2 1.9.5 2.6L5 7.3 2.5 8.5 3 5.9 1 4l2.8-.5L5 1z"/>
+                    </svg>
+                    <span className="text-[11.5px] font-semibold text-gray-600">{p.note.toFixed(1)}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
       </div>
     </div>
   )

@@ -1,27 +1,37 @@
+type BadgeVariant =
+  | 'amber'
+  | 'violet'
+  | 'blue'
+  | 'emerald'
+  | 'green'
+  | 'red'
+  | 'gray'
+  | 'teal'
+
+const VARIANTS: Record<BadgeVariant, string> = {
+  amber:   'bg-amber-50 text-amber-700 border-amber-200',
+  violet:  'bg-violet-50 text-violet-700 border-violet-200',
+  blue:    'bg-blue-50 text-blue-700 border-blue-200',
+  emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  green:   'bg-green-50 text-green-700 border-green-200',
+  red:     'bg-red-50 text-red-700 border-red-200',
+  gray:    'bg-gray-50 text-gray-600 border-gray-200',
+  teal:    'bg-[#f0f7f5] text-[#0d5068] border-[#d1e8e2]',
+}
+
 interface BadgeProps {
-  variant: 'active' | 'pending' | 'suspended' | 'review' | 'enroute' | 'inprog' | 'done' | 'open' | 'urgent' | 'cancelled'
-  label: string
+  children: React.ReactNode
+  variant?: BadgeVariant
+  dot?: boolean
 }
 
-const config: Record<BadgeProps['variant'], { bg: string; text: string; dot: string }> = {
-  active:    { bg: 'bg-green-50',    text: 'text-green-700',  dot: 'bg-green-500' },
-  pending:   { bg: 'bg-amber-50',    text: 'text-amber-700',  dot: 'bg-amber-400' },
-  suspended: { bg: 'bg-red-50',      text: 'text-red-700',    dot: 'bg-red-500' },
-  review:    { bg: 'bg-violet-50',   text: 'text-violet-700', dot: 'bg-violet-500' },
-  enroute:   { bg: 'bg-blue-50',     text: 'text-blue-700',   dot: 'bg-blue-500' },
-  inprog:    { bg: 'bg-emerald-50',  text: 'text-emerald-700',dot: 'bg-emerald-500' },
-  done:      { bg: 'bg-green-50',    text: 'text-green-700',  dot: 'bg-green-500' },
-  open:      { bg: 'bg-amber-50',    text: 'text-amber-700',  dot: 'bg-amber-400' },
-  urgent:    { bg: 'bg-red-50',      text: 'text-red-700',    dot: 'bg-red-500' },
-  cancelled: { bg: 'bg-gray-100',    text: 'text-gray-500',   dot: 'bg-gray-400' },
-}
-
-export default function Badge({ variant, label }: BadgeProps) {
-  const { bg, text, dot } = config[variant]
+export default function Badge({ children, variant = 'gray', dot = false }: BadgeProps) {
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full ${bg} ${text}`}>
-      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${dot}`} />
-      {label}
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-md border ${VARIANTS[variant]}`}>
+      {dot && (
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: 'currentColor', opacity: 0.7 }} />
+      )}
+      {children}
     </span>
   )
 }
