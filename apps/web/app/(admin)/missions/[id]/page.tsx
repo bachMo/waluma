@@ -77,16 +77,16 @@ interface Mission {
 
 const statutVariant: Record<
   string,
-  'active' | 'enroute' | 'inprog' | 'urgent' | 'done' | 'cancelled' | 'pending'
+  'amber' | 'blue' | 'violet' | 'green' | 'gray' | 'red' | 'teal'
 > = {
-  EN_ATTENTE: 'urgent',
-  ACCEPTEE: 'pending',
-  EN_ROUTE: 'enroute',
-  ARRIVE: 'enroute',
-  EN_COURS: 'inprog',
-  TERMINEE: 'done',
-  ANNULEE: 'cancelled',
-  EXPIREE: 'cancelled',
+  EN_ATTENTE: 'amber',
+  ACCEPTEE: 'blue',
+  EN_ROUTE: 'violet',
+  ARRIVE: 'violet',
+  EN_COURS: 'teal',
+  TERMINEE: 'green',
+  ANNULEE: 'red',
+  EXPIREE: 'gray',
 }
 
 const statutLabel: Record<string, string> = {
@@ -218,75 +218,52 @@ export default function MissionDetailPage() {
 
   return (
     <div className="flex flex-col h-full min-w-0">
-      <Topbar title="Détail mission">
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => router.push('/missions')}
-            className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition whitespace-nowrap"
-          >
-            ← Retour
-          </button>
-
-          {mission.statut === 'EN_ATTENTE' &&
-            !mission.praticien && (
+      <Topbar
+        title="Détail mission"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => router.push('/missions')}
+              className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition whitespace-nowrap"
+            >
+              ← Retour
+            </button>
+            {mission.statut === 'EN_ATTENTE' && !mission.praticien && (
               <button
                 onClick={() => {
-                  const praticienId = prompt(
-                    'ID du praticien à assigner :'
-                  )
-
+                  const praticienId = prompt('ID du praticien à assigner :')
                   if (!praticienId) return
-
                   setAssigning(true)
-
-                  api
-                    .patch(
-                      `/missions/${id}/assigner`,
-                      { praticienId }
-                    )
+                  api.patch(`/missions/${id}/assigner`, { praticienId })
                     .then(() => load())
                     .finally(() => setAssigning(false))
                 }}
                 disabled={assigning}
                 className="text-xs font-bold bg-[#0d5068] text-white rounded-lg px-3 py-1.5 hover:bg-[#0a3f52] transition disabled:opacity-50 whitespace-nowrap"
               >
-                {assigning
-                  ? '...'
-                  : 'Assigner un praticien'}
+                {assigning ? '...' : 'Assigner un praticien'}
               </button>
             )}
-
-          {[
-            'ACCEPTEE',
-            'EN_ROUTE',
-            'ARRIVE',
-            'EN_COURS',
-          ].includes(mission.statut) && (
-            <button
-              onClick={() => handleStatut('ANNULEE')}
-              className="text-xs font-bold bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-100 transition whitespace-nowrap"
-            >
-              Annuler la mission
-            </button>
-          )}
-        </div>
-      </Topbar>
+            {['ACCEPTEE','EN_ROUTE','ARRIVE','EN_COURS'].includes(mission.statut) && (
+              <button
+                onClick={() => handleStatut('ANNULEE')}
+                className="text-xs font-bold bg-red-50 text-red-700 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-100 transition whitespace-nowrap"
+              >
+                Annuler la mission
+              </button>
+            )}
+          </div>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 min-w-0">
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-6">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-2">
-              <Badge
-                variant={
-                  statutVariant[mission.statut] ??
-                  'pending'
-                }
-                label={
-                  statutLabel[mission.statut] ??
-                  mission.statut
-                }
-              />
+              <Badge variant={statutVariant[mission.statut] ?? 'gray'}>
+                {statutLabel[mission.statut] ?? mission.statut}
+              </Badge>
 
               {mission.urgence && (
                 <span className="text-[10px] font-bold bg-red-100 text-red-700 px-2 py-0.5 rounded-full uppercase tracking-wider whitespace-nowrap">

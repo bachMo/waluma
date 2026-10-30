@@ -232,7 +232,7 @@ export default function PraticienDetailPage() {
                 {praticien.user.prenom} {praticien.user.nom}
               </h1>
               <div className="flex items-center gap-2 mt-1 flex-wrap">
-                <Badge variant={statutVariant[praticien.statutCompte] ?? 'amber'} label={statutLabel[praticien.statutCompte] ?? praticien.statutCompte} />
+                <Badge variant={statutVariant[praticien.statutCompte] ?? 'amber'}>{statutLabel[praticien.statutCompte] ?? praticien.statutCompte}</Badge>
                 {praticien.bloque && (
                   <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">🔒 Bloqué</span>
                 )}
@@ -439,7 +439,7 @@ export default function PraticienDetailPage() {
                             {new Date(doc.createdAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })}
                           </td>
                           <td className="px-4 py-3">
-                            <Badge variant={statutDocVariant[doc.statut] ?? 'amber'} label={doc.statut === 'VALIDE' ? 'Validé' : doc.statut === 'REFUSE' ? 'Refusé' : 'En attente'} />
+                            <Badge variant={statutDocVariant[doc.statut] ?? 'amber'}>{doc.statut === 'VALIDE' ? 'Validé' : doc.statut === 'REFUSE' ? 'Refusé' : 'En attente'}</Badge>
                             {doc.commentaireAdmin && <div className="text-[10px] text-red-500 mt-0.5">{doc.commentaireAdmin}</div>}
                           </td>
                           <td className="px-4 py-3">
@@ -464,7 +464,7 @@ export default function PraticienDetailPage() {
                           <div className="font-semibold text-gray-900 text-sm">{typeDocumentLabel[doc.type] ?? doc.type}</div>
                           <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-xs text-[#0d5068] hover:underline truncate block max-w-[200px]">{doc.nom}</a>
                         </div>
-                        <Badge variant={statutDocVariant[doc.statut] ?? 'amber'} label={doc.statut === 'VALIDE' ? 'Validé' : doc.statut === 'REFUSE' ? 'Refusé' : 'En attente'} />
+                        <Badge variant={statutDocVariant[doc.statut] ?? 'amber'}>{doc.statut === 'VALIDE' ? 'Validé' : doc.statut === 'REFUSE' ? 'Refusé' : 'En attente'}</Badge>
                       </div>
                       <div className="flex gap-2 mt-3">
                         {doc.statut !== 'VALIDE' && <button onClick={() => handleDocStatut(doc.id, 'VALIDE')} className="text-[11px] font-bold bg-green-50 text-green-700 border border-green-200 rounded-lg px-2 py-1">Valider</button>}
