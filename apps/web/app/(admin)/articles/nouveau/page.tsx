@@ -37,20 +37,25 @@ export default function NouvelArticlePage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Nouvel article">
-        <button onClick={() => router.push('/articles')}
-          className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
-          Annuler
-        </button>
-        <button onClick={() => handleSubmit('brouillon')} disabled={loading}
-          className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition disabled:opacity-50 hidden sm:block">
-          Sauvegarder brouillon
-        </button>
-        <button onClick={() => handleSubmit('publié')} disabled={loading}
-          className="text-xs font-bold bg-[#22c55e] text-white rounded-lg px-3 py-1.5 hover:bg-[#16a34a] transition disabled:opacity-50">
-          {loading ? 'Publication...' : 'Publier'}
-        </button>
-      </Topbar>
+      <Topbar
+        title="Nouvel article"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button onClick={() => router.push('/articles')}
+              className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={() => handleSubmit('brouillon')} disabled={loading}
+              className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition disabled:opacity-50 hidden sm:block">
+              Sauvegarder brouillon
+            </button>
+            <button onClick={() => handleSubmit('publié')} disabled={loading}
+              className="text-xs font-bold bg-[#22c55e] text-white rounded-lg px-3 py-1.5 hover:bg-[#16a34a] transition disabled:opacity-50">
+              {loading ? 'Publication...' : 'Publier'}
+            </button>
+          </div>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mb-5">

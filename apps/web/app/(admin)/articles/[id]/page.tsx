@@ -147,31 +147,33 @@ export default function EditArticlePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      <Topbar title="Modifier l'article">
-        {/* Boutons : wrap sur mobile, ligne sur sm+ */}
-        <div className="flex w-full flex-wrap items-center gap-2">
-          <button
-            onClick={() => router.push('/articles')}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold transition hover:bg-gray-50"
-          >
-            Annuler
-          </button>
-          <button
-            onClick={() => handleSubmit('brouillon')}
-            disabled={saving}
-            className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold transition hover:bg-gray-50 disabled:opacity-50"
-          >
-            Sauvegarder brouillon
-          </button>
-          <button
-            onClick={() => handleSubmit('publié')}
-            disabled={saving}
-            className="rounded-lg bg-[#22c55e] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#16a34a] disabled:opacity-50"
-          >
-            {saving ? 'Sauvegarde...' : 'Publier'}
-          </button>
-        </div>
-      </Topbar>
+      <Topbar
+        title="Modifier l'article"
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => router.push('/articles')}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold transition hover:bg-gray-50"
+            >
+              Annuler
+            </button>
+            <button
+              onClick={() => handleSubmit('brouillon')}
+              disabled={saving}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold transition hover:bg-gray-50 disabled:opacity-50"
+            >
+              Sauvegarder brouillon
+            </button>
+            <button
+              onClick={() => handleSubmit('publié')}
+              disabled={saving}
+              className="rounded-lg bg-[#22c55e] px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#16a34a] disabled:opacity-50"
+            >
+              {saving ? 'Sauvegarde...' : 'Publier'}
+            </button>
+          </div>
+        }
+      />
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
         <div className="mb-5">
