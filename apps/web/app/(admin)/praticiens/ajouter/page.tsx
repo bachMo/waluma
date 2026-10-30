@@ -156,15 +156,20 @@ export default function AjouterPraticienPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <Topbar title="Ajouter un praticien">
-        <button onClick={() => router.push('/praticiens')} className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
-          Annuler
-        </button>
-        <button onClick={handleSubmit} disabled={saving}
-          className="text-xs font-bold bg-[#22c55e] text-white rounded-lg px-3 py-1.5 hover:bg-[#16a34a] transition disabled:opacity-50">
-          {saving ? 'Création...' : 'Créer le praticien'}
-        </button>
-      </Topbar>
+      <Topbar
+        title="Ajouter un praticien"
+        actions={
+          <div className="flex items-center gap-2">
+            <button onClick={() => router.push('/praticiens')} className="text-xs font-semibold border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50 transition">
+              Annuler
+            </button>
+            <button onClick={handleSubmit} disabled={saving}
+              className="text-xs font-bold bg-[#22c55e] text-white rounded-lg px-3 py-1.5 hover:bg-[#16a34a] transition disabled:opacity-50">
+              {saving ? 'Création...' : 'Créer le praticien'}
+            </button>
+          </div>
+        }
+      />
 
       <div className="flex-1 overflow-y-auto p-4 md:p-6">
         <div className="mb-5">
