@@ -1,186 +1,206 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import Topbar from '@/components/admin/Topbar'
 import api from '@/lib/api'
+import { ReponseParametres } from '@/lib/api-types'
 
-interface Config {
-  fraisService: number
-  delaiMaxMinutes: number
-  notificationsSms: boolean
-  notificationsEmail: boolean
-  maintenanceMode: boolean
-  versionApp: string
+type Valeur = string | number | boolean
+
+interface Champ {
+  cle: string
+  valeur: Valeur
+  label: string
+  description: string | null
+  type: string
+}
+
+const CATEGORIE_LABEL: Record<string, string> = {
+  tarifs: 'Tarifs et commission',
+  matching: 'Attribution des missions',
+  notifications: 'Notifications',
+  general: 'Général',
+  systeme: 'Système',
 }
 
 export default function ParametresPage() {
-  const [config, setConfig] = useState<Config | null>(null)
+  const [categories, setCategories] = useState<Record<string, Champ[]>>({})
+  const [modifs, setModifs] = useState<Record<string, Valeur>>({})
   const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [enregistrement, setEnregistrement] = useState(false)
+  const [message, setMessage] = useState<{ ton: 'ok' | 'erreur'; texte: string } | null>(null)
 
-  useEffect(() => {
-    api.get<Config>('/config').then(({ data }) => { setConfig(data) }).catch(() => {
-      setConfig({
-        fraisService: 10,
-        delaiMaxMinutes: 45,
-        notificationsSms: true,
-        notificationsEmail: false,
-        maintenanceMode: false,
-        versionApp: '1.0.0',
+  const charger = useCallback(async () => {
+    try {
+      // GET /parametres → { grouped, raw }
+      const { data } = await api.get<ReponseParametres>('/parametres')
+      const groupes: Record<string, Champ[]> = {}
+      Object.entries(data?.grouped ?? {}).forEach(([categorie, champs]) => {
+        groupes[categorie] = Object.entries(champs).map(([cle, c]) => ({
+          cle,
+          valeur: c.valeur as Valeur,
+          label: c.label,
+          description: c.description,
+          type: c.type,
+        }))
       })
-    }).finally(() => setLoading(false))
+      setCategories(groupes)
+      setModifs({})
+      setMessage(null)
+    } catch {
+      setMessage({ ton: 'erreur', texte: "Impossible de charger les paramètres. Vérifiez que l'API est accessible." })
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  function set<K extends keyof Config>(k: K, v: Config[K]) {
-    setConfig((prev) => prev ? { ...prev, [k]: v } : null)
+  useEffect(() => { charger() }, [charger])
+
+  function valeurDe(c: Champ): Valeur {
+    return c.cle in modifs ? modifs[c.cle] : c.valeur
   }
 
-  async function handleSave() {
-    if (!config) return
-    setSaving(true)
+  function modifier(cle: string, v: Valeur) {
+    setModifs((p) => ({ ...p, [cle]: v }))
+    setMessage(null)
+  }
+
+  const nbModifs = Object.keys(modifs).length
+
+  async function enregistrer() {
+    if (nbModifs === 0) return
+    setEnregistrement(true)
     try {
-      await api.put('/config', config)
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
+      // PATCH /parametres attend un objet plat { cle: valeur }
+      await api.patch('/parametres', modifs)
+      setMessage({ ton: 'ok', texte: `${nbModifs} paramètre${nbModifs > 1 ? 's' : ''} enregistré${nbModifs > 1 ? 's' : ''}.` })
+      await charger()
     } catch {
-      // ignore
+      setMessage({ ton: 'erreur', texte: "L'enregistrement a échoué." })
     } finally {
-      setSaving(false)
+      setEnregistrement(false)
     }
   }
 
-  const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-3 text-[14px] outline-none focus:border-[#0d5068] focus:ring-2 focus:ring-[#0d5068]/10 transition bg-white"
+  const entrees = Object.entries(categories)
 
   return (
     <div className="flex flex-col min-h-full">
       <Topbar
         title="Paramètres"
-        subtitle="Configuration de la plateforme"
+        subtitle={nbModifs > 0 ? `${nbModifs} modification${nbModifs > 1 ? 's' : ''} non enregistrée${nbModifs > 1 ? 's' : ''}` : 'Configuration de la plateforme'}
         actions={
-          <button
-            onClick={handleSave}
-            disabled={saving || loading}
-            className="flex items-center gap-2 bg-[#0d5068] hover:bg-[#0a3f52] disabled:opacity-55 text-white text-[12.5px] font-bold px-4 py-2 rounded-lg transition-colors"
-          >
-            {saving ? (
-              <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            ) : saved ? (
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <path d="M2 6.5l3.5 3.5L11 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            ) : (
-              <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
-                <path d="M1.5 9.5V11.5h2l6-6L7.5 3.5l-6 6zM10.5 2.5L10 2a.7.7 0 00-1 0l-.8.8L10.2 4.8l.8-.8a.7.7 0 000-1l-.5-.5z" stroke="white" strokeWidth="1.2" strokeLinejoin="round"/>
-              </svg>
+          <div className="flex items-center gap-2">
+            {nbModifs > 0 && (
+              <button
+                onClick={() => { setModifs({}); setMessage(null) }}
+                disabled={enregistrement}
+                className="rounded-lg border border-gray-200 px-3 py-2 text-[12.5px] font-semibold text-gray-600 transition-colors hover:bg-gray-50 disabled:opacity-50"
+              >
+                Annuler
+              </button>
             )}
-            {saved ? 'Enregistré' : 'Enregistrer'}
-          </button>
+            <button
+              onClick={enregistrer}
+              disabled={enregistrement || nbModifs === 0}
+              className="rounded-lg bg-[#0d5068] px-4 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-[#0a3f52] disabled:cursor-not-allowed disabled:bg-gray-300"
+            >
+              {enregistrement ? 'Enregistrement…' : 'Enregistrer'}
+            </button>
+          </div>
         }
       />
 
-      <div className="p-5 sm:p-6 space-y-4 max-w-2xl">
+      <div className="flex-1 space-y-4 p-5 sm:p-6">
+        {message && (
+          <div
+            className={`rounded-xl border px-4 py-3 text-[13px] ${
+              message.ton === 'ok'
+                ? 'border-green-100 bg-green-50 text-green-700'
+                : 'border-red-100 bg-red-50 text-red-700'
+            }`}
+          >
+            {message.texte}
+          </div>
+        )}
+
         {loading ? (
-          <div className="space-y-3">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-100 h-20 animate-pulse" />
+          <div className="max-w-2xl space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-40 animate-pulse rounded-xl border border-gray-100 bg-white" />
             ))}
           </div>
-        ) : config && (
-          <>
-            {/* Tarification */}
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <div className="text-[13.5px] font-bold text-[#0a2535] mb-4">Tarification</div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[12px] font-semibold text-gray-500 mb-1.5">
-                    Frais de service (%)
-                  </label>
-                  <input
-                    type="number"
-                    min={0}
-                    max={50}
-                    value={config.fraisService}
-                    onChange={(e) => set('fraisService', Number(e.target.value))}
-                    className={inputCls}
-                  />
-                  <p className="text-[11px] text-gray-400 mt-1">Commission prélevée sur chaque mission.</p>
-                </div>
-                <div>
-                  <label className="block text-[12px] font-semibold text-gray-500 mb-1.5">
-                    Délai max avant annulation (min)
-                  </label>
-                  <input
-                    type="number"
-                    min={5}
-                    max={120}
-                    value={config.delaiMaxMinutes}
-                    onChange={(e) => set('delaiMaxMinutes', Number(e.target.value))}
-                    className={inputCls}
-                  />
-                  <p className="text-[11px] text-gray-400 mt-1">Délai sans praticien avant annulation auto.</p>
-                </div>
-              </div>
-            </div>
+        ) : entrees.length === 0 ? (
+          <div className="max-w-2xl rounded-xl border border-gray-100 bg-white py-14 text-center">
+            <p className="text-[13.5px] font-semibold text-[#0a2535]">Aucun paramètre configuré</p>
+            <p className="mx-auto mt-1 max-w-[42ch] text-[12.5px] text-gray-400">
+              Lancez le script de seed des paramètres côté API pour initialiser les tarifs,
+              la commission et les règles d&apos;attribution.
+            </p>
+          </div>
+        ) : (
+          <div className="max-w-2xl space-y-4">
+            {entrees.map(([categorie, champs]) => (
+              <section key={categorie} className="rounded-xl border border-gray-100 bg-white p-5">
+                <h2 className="mb-4 text-[13.5px] font-bold text-[#0a2535]">
+                  {CATEGORIE_LABEL[categorie] ?? categorie}
+                </h2>
 
-            {/* Notifications */}
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <div className="text-[13.5px] font-bold text-[#0a2535] mb-4">Notifications</div>
-              <div className="space-y-3">
-                {[
-                  { key: 'notificationsSms' as keyof Config, label: 'Notifications SMS', desc: 'Envoi de SMS aux patients et praticiens.' },
-                  { key: 'notificationsEmail' as keyof Config, label: 'Notifications email', desc: 'Envoi de confirmations par email.' },
-                ].map((item) => (
-                  <div key={item.key} className="flex items-center justify-between py-2">
-                    <div>
-                      <div className="text-[13px] font-semibold text-[#0a2535]">{item.label}</div>
-                      <div className="text-[11.5px] text-gray-400">{item.desc}</div>
-                    </div>
-                    <button
-                      onClick={() => set(item.key, !config[item.key])}
-                      className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${config[item.key] ? 'bg-[#22c55e]' : 'bg-gray-200'}`}
-                    >
-                      <span
-                        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all ${config[item.key] ? 'left-4.5 translate-x-0' : 'left-0.5'}`}
-                        style={{ left: config[item.key] ? '18px' : '2px' }}
-                      />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
+                <div className="divide-y divide-gray-50">
+                  {champs.map((c) => {
+                    const v = valeurDe(c)
+                    const modifie = c.cle in modifs
+                    return (
+                      <div key={c.cle} className="flex items-center justify-between gap-5 py-3.5 first:pt-0 last:pb-0">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[13px] font-semibold text-[#0a2535]">
+                            {c.label}
+                            {modifie && <span className="ml-2 text-[11px] font-medium text-amber-600">modifié</span>}
+                          </p>
+                          {c.description && (
+                            <p className="mt-0.5 text-[11.5px] leading-snug text-gray-400">{c.description}</p>
+                          )}
+                        </div>
 
-            {/* Maintenance */}
-            <div className="bg-white rounded-xl border border-gray-100 p-5">
-              <div className="text-[13.5px] font-bold text-[#0a2535] mb-4">Système</div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between py-2">
-                  <div>
-                    <div className="text-[13px] font-semibold text-[#0a2535]">Mode maintenance</div>
-                    <div className="text-[11.5px] text-gray-400">Désactive l'accès au site pour les utilisateurs.</div>
-                  </div>
-                  <button
-                    onClick={() => set('maintenanceMode', !config.maintenanceMode)}
-                    className={`w-10 h-6 rounded-full transition-all relative flex-shrink-0 ${config.maintenanceMode ? 'bg-[#f97316]' : 'bg-gray-200'}`}
-                  >
-                    <span
-                      className="absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-all"
-                      style={{ left: config.maintenanceMode ? '18px' : '2px' }}
-                    />
-                  </button>
+                        <div className="shrink-0">
+                          {c.type === 'boolean' ? (
+                            <button
+                              onClick={() => modifier(c.cle, !v)}
+                              role="switch"
+                              aria-checked={Boolean(v)}
+                              aria-label={c.label}
+                              className={`relative h-6 w-10 rounded-full transition-colors ${v ? 'bg-[#22c55e]' : 'bg-gray-200'}`}
+                            >
+                              <span
+                                className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all"
+                                style={{ left: v ? '18px' : '2px' }}
+                              />
+                            </button>
+                          ) : c.type === 'number' ? (
+                            <input
+                              type="number"
+                              value={String(v ?? '')}
+                              onChange={(e) => modifier(c.cle, e.target.value === '' ? '' : Number(e.target.value))}
+                              aria-label={c.label}
+                              className="w-28 rounded-lg border border-gray-200 px-3 py-2 text-right text-[13px] outline-none transition focus:border-[#0d5068] focus:ring-2 focus:ring-[#0d5068]/10"
+                            />
+                          ) : (
+                            <input
+                              type="text"
+                              value={String(v ?? '')}
+                              onChange={(e) => modifier(c.cle, e.target.value)}
+                              aria-label={c.label}
+                              className="w-48 rounded-lg border border-gray-200 px-3 py-2 text-[13px] outline-none transition focus:border-[#0d5068] focus:ring-2 focus:ring-[#0d5068]/10"
+                            />
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="flex items-center justify-between py-2 border-t border-gray-100">
-                  <div>
-                    <div className="text-[13px] font-semibold text-[#0a2535]">Version de l'app</div>
-                    <div className="text-[11.5px] text-gray-400">Version actuellement déployée.</div>
-                  </div>
-                  <span className="text-[12.5px] font-semibold text-[#0d5068] bg-[#f0f7f5] px-3 py-1 rounded-lg">
-                    v{config.versionApp}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </>
+              </section>
+            ))}
+          </div>
         )}
       </div>
     </div>

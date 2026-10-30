@@ -2,123 +2,184 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import Topbar from '@/components/admin/Topbar'
 import StatCard from '@/components/ui/StatCard'
 import api from '@/lib/api'
-
-interface StatsData {
-  revenuMensuel: { mois: string; revenu: number; missions: number }[]
-  tauxCompletion: number
-  delaiMoyen: number
-  noteMoyenne: number
-  totalRevenu: number
-  missionsParSpecialite: { specialite: string; count: number }[]
-}
+import { DashboardStats, SPECIALITE_LABEL, fcfa, nombre } from '@/lib/api-types'
 
 export default function StatistiquesPage() {
-  const [data, setData] = useState<StatsData | null>(null)
+  const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
-  const [periode, setPeriode] = useState<'3m' | '6m' | '12m'>('6m')
+  const [erreur, setErreur] = useState(false)
 
-  const fetch = useCallback(async () => {
+  const charger = useCallback(async () => {
     try {
-      const { data: d } = await api.get<StatsData>(`/stats/avancees?periode=${periode}`)
-      setData(d)
+      const { data } = await api.get<DashboardStats>('/stats/dashboard')
+      setStats(data)
+      setErreur(false)
     } catch {
-      // ignore
+      setErreur(true)
     } finally {
       setLoading(false)
     }
-  }, [periode])
+  }, [])
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => { charger() }, [charger])
 
-  const fmtF = (n: number) => new Intl.NumberFormat('fr-FR').format(n) + ' F'
+  const k = stats?.kpis
+  const repartition = stats?.repartitionSpecialites ?? []
+  const graphique = stats?.graphiqueMissions ?? []
+  const totalReparti = repartition.reduce((a, r) => a + r.count, 0)
+
+  const donneesSpecialites = repartition.map((r) => ({
+    nom: SPECIALITE_LABEL[r.specialite] ?? r.specialite,
+    missions: r.count,
+  }))
+
+  const tauxCompletion =
+    k && k.totalMissions > 0
+      ? Math.round(((k.totalMissions - k.missionsActives) / k.totalMissions) * 100)
+      : null
 
   return (
     <div className="flex flex-col min-h-full">
-      <Topbar
-        title="Statistiques"
-        subtitle="Analyse des performances"
-        actions={
-          <div className="flex gap-1 bg-gray-100 rounded-lg p-0.5">
-            {(['3m', '6m', '12m'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setPeriode(p)}
-                className={`px-3 py-1.5 text-[11.5px] font-semibold rounded-md transition-all ${
-                  periode === p ? 'bg-white text-[#0a2535] shadow-sm' : 'text-gray-500 hover:text-[#0a2535]'
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        }
-      />
+      <Topbar title="Statistiques" subtitle="Chiffres cumulés depuis le lancement" />
 
-      <div className="p-5 sm:p-6 space-y-5">
-        {/* KPIs */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="flex-1 space-y-5 p-5 sm:p-6">
+        {erreur && !stats && (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-[13px] text-red-700">
+            Impossible de charger les statistiques. Vérifiez que l&apos;API est accessible.
+          </div>
+        )}
+
+        {/* Vue d'ensemble */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl border border-gray-100 h-24 animate-pulse" />
+              <div key={i} className="h-28 animate-pulse rounded-xl border border-gray-100 bg-white" />
             ))
           ) : (
             <>
-              <StatCard label="Revenu total" value={fmtF(data?.totalRevenu ?? 0)} accent="#22c55e" />
-              <StatCard label="Taux de complétion" value={`${data?.tauxCompletion ?? 0}%`} accent="#0d5068" />
-              <StatCard label="Délai moyen" value={`${data?.delaiMoyen ?? 0} min`} accent="#6366f1" />
-              <StatCard label="Note moyenne" value={`${(data?.noteMoyenne ?? 0).toFixed(1)} / 5`} accent="#f97316" />
+              <StatCard
+                label="Missions au total"
+                value={nombre(k?.totalMissions)}
+                sub={`${nombre(k?.missionsCeMois)} ce mois`}
+                accent="#0d5068"
+              />
+              <StatCard
+                label="Taux de complétion"
+                value={tauxCompletion === null ? '—' : `${tauxCompletion}%`}
+                sub={tauxCompletion === null ? 'aucune mission' : `${nombre(k?.missionsActives)} encore en cours`}
+                accent="#22c55e"
+              />
+              <StatCard
+                label="Praticiens"
+                value={nombre(k?.praticiensActifs)}
+                sub={`${nombre(k?.praticiensAValider)} en attente de validation`}
+                accent="#6366f1"
+              />
+              <StatCard
+                label="Encaissé ce mois"
+                value={fcfa(k?.volumeCeMois)}
+                sub="paiements confirmés"
+                accent="#f97316"
+              />
             </>
           )}
         </div>
 
-        {/* COURBE REVENUS */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <div className="mb-5">
-            <div className="text-[14px] font-bold text-[#0a2535]">Revenus et missions</div>
-            <div className="text-[11.5px] text-gray-400 mt-0.5">Évolution mensuelle sur la période</div>
+        {/* Second rang : santé de la plateforme */}
+        {!loading && k && (
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {[
+              { l: 'Patients inscrits', v: nombre(k.totalPatients) },
+              { l: 'Praticiens inscrits', v: nombre(k.totalPraticiens) },
+              { l: 'Litiges ouverts', v: nombre(k.litigesOuverts) },
+              { l: 'Litiges au total', v: nombre(k.totalLitiges) },
+            ].map((x) => (
+              <div key={x.l} className="rounded-xl border border-gray-100 bg-white px-4 py-3.5">
+                <p className="text-[11.5px] text-gray-400">{x.l}</p>
+                <p className="mt-1 text-[20px] font-bold text-[#0a2535]">{x.v}</p>
+              </div>
+            ))}
           </div>
+        )}
+
+        {/* Missions par jour */}
+        <div className="rounded-xl border border-gray-100 bg-white p-5">
+          <h2 className="text-[14px] font-bold text-[#0a2535]">Missions par jour</h2>
+          <p className="mt-0.5 mb-5 text-[11.5px] text-gray-400">Mois en cours</p>
+
           {loading ? (
-            <div className="h-56 bg-gray-50 rounded-lg animate-pulse" />
+            <div className="h-72 animate-pulse rounded-lg bg-gray-50" />
+          ) : graphique.length === 0 ? (
+            <div className="flex h-72 flex-col items-center justify-center text-center">
+              <p className="text-[13.5px] font-semibold text-[#0a2535]">Aucune mission ce mois</p>
+              <p className="mt-1 text-[12.5px] text-gray-400">Le graphique se remplira dès la première demande.</p>
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <LineChart data={data?.revenuMensuel ?? []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                <XAxis dataKey="mois" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-                <YAxis yAxisId="left" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={40} />
-                <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={36} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line yAxisId="left" type="monotone" dataKey="revenu" name="Revenus (F)" stroke="#0d5068" strokeWidth={2} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="missions" name="Missions" stroke="#22c55e" strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={graphique} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
+                  <XAxis dataKey="jour" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <Tooltip
+                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }}
+                    labelFormatter={(v) => `Jour ${v}`}
+                    formatter={(v) => [String(v), 'missions']}
+                  />
+                  <Bar dataKey="missions" fill="#0d5068" radius={[4, 4, 0, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
 
-        {/* MISSIONS PAR SPÉCIALITÉ */}
-        <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <div className="mb-5">
-            <div className="text-[14px] font-bold text-[#0a2535]">Missions par spécialité</div>
-            <div className="text-[11.5px] text-gray-400 mt-0.5">Répartition sur la période</div>
-          </div>
+        {/* Répartition par spécialité */}
+        <div className="rounded-xl border border-gray-100 bg-white p-5">
+          <h2 className="text-[14px] font-bold text-[#0a2535]">Missions par spécialité</h2>
+          <p className="mt-0.5 mb-5 text-[11.5px] text-gray-400">
+            {totalReparti > 0 ? `${nombre(totalReparti)} missions réparties` : 'Depuis le lancement'}
+          </p>
+
           {loading ? (
-            <div className="h-48 bg-gray-50 rounded-lg animate-pulse" />
+            <div className="h-72 animate-pulse rounded-lg bg-gray-50" />
+          ) : donneesSpecialites.length === 0 ? (
+            <div className="flex h-40 flex-col items-center justify-center text-center">
+              <p className="text-[13.5px] font-semibold text-[#0a2535]">Aucune mission enregistrée</p>
+              <p className="mt-1 text-[12.5px] text-gray-400">La répartition apparaîtra ici.</p>
+            </div>
           ) : (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={data?.missionsParSpecialite ?? []} barSize={20} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-                <YAxis dataKey="specialite" type="category" tick={{ fontSize: 11, fill: '#6b7280' }} tickLine={false} axisLine={false} width={120} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                <Bar dataKey="count" fill="#0d5068" radius={[0, 4, 4, 0]} name="Missions" />
-              </BarChart>
-            </ResponsiveContainer>
+            <div style={{ height: Math.max(180, donneesSpecialites.length * 46) }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={donneesSpecialites}
+                  layout="vertical"
+                  margin={{ top: 0, right: 16, left: 8, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
+                  <YAxis
+                    type="category"
+                    dataKey="nom"
+                    width={140}
+                    tick={{ fontSize: 12, fill: '#475569' }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    cursor={{ fill: '#f8fafc' }}
+                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12 }}
+                    formatter={(v) => [String(v), 'missions']}
+                  />
+                  <Bar dataKey="missions" fill="#0d5068" radius={[0, 4, 4, 0]} barSize={18} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           )}
         </div>
       </div>

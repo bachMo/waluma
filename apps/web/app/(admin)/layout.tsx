@@ -3,18 +3,27 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Sidebar from '@/components/admin/Sidebar'
-import Topbar from '@/components/admin/Topbar'
 import { useAuthStore } from '@/store/auth.store'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
-  const { user } = useAuthStore()
+  const { user, hydrate } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  // Le store est en mémoire : au rechargement de la page il est vide même si
+  // un token valide existe. Il faut l'hydrater depuis localStorage AVANT de
+  // décider de rediriger, sinon toute actualisation renvoie au login.
+  const [hydrate_fait, setHydrateFait] = useState(false)
 
   useEffect(() => {
-    if (!user) router.replace('/login')
-  }, [user, router])
+    hydrate()
+    setHydrateFait(true)
+  }, [hydrate])
 
+  useEffect(() => {
+    if (hydrate_fait && !user) router.replace('/login')
+  }, [hydrate_fait, user, router])
+
+  if (!hydrate_fait) return null
   if (!user) return null
 
   return (
@@ -38,10 +47,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* MAIN */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <Topbar
-          title=""
-          onMenuClick={() => setSidebarOpen((v) => !v)}
-        />
+        {/* Chaque page rend sa propre Topbar (titre, sous-titre, actions).
+            Le layout ne fournit que le déclencheur du menu mobile. */}
+        <button
+          onClick={() => setSidebarOpen((v) => !v)}
+          aria-label="Ouvrir le menu"
+          className="lg:hidden fixed bottom-5 right-5 z-30 w-12 h-12 rounded-full bg-[#0d5068] text-white shadow-lg flex items-center justify-center"
+        >
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+          </svg>
+        </button>
         <main className="flex-1 overflow-y-auto">
           {children}
         </main>

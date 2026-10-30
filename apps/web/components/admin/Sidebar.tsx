@@ -5,9 +5,12 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import api from '@/lib/api'
 
+/** GET /stats/badges → { praticiensEnAttente, missionsActives, litigesOuverts, demandesEnAttente } */
 interface Badges {
-  demandes?: number
-  litiges?: number
+  praticiensEnAttente?: number
+  missionsActives?: number
+  litigesOuverts?: number
+  demandesEnAttente?: number
 }
 
 const NAV = [
@@ -44,6 +47,7 @@ const NAV = [
       {
         href: '/praticiens',
         label: 'Praticiens',
+        badge: 'praticiensEnAttente' as keyof Badges,
         icon: (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="6" cy="5" r="3" stroke="currentColor" strokeWidth="1.4"/>
@@ -65,7 +69,7 @@ const NAV = [
       {
         href: '/demandes',
         label: 'Demandes',
-        badge: 'demandes' as keyof Badges,
+        badge: 'demandesEnAttente' as keyof Badges,
         icon: (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.4"/>
@@ -76,7 +80,7 @@ const NAV = [
       {
         href: '/litiges',
         label: 'Litiges',
-        badge: 'litiges' as keyof Badges,
+        badge: 'litigesOuverts' as keyof Badges,
         icon: (
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M8 1.5l6.5 12H1.5L8 1.5z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/>

@@ -41,7 +41,7 @@ export default function LoginPage() {
         setError('Accès réservé aux administrateurs.')
         return
       }
-      document.cookie = `waluma_access_token=${data.accessToken}; path=/; max-age=900`
+      // setAuth pose le cookie lu par proxy.ts (durée 7 jours, pas 15 min).
       setAuth(data.user, data.accessToken, data.refreshToken)
       router.push('/dashboard')
     } catch {

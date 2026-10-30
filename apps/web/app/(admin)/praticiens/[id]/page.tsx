@@ -92,12 +92,15 @@ export default function PraticienDetailPage() {
     try {
       const { data } = await api.get(`/praticiens/${id}`)
       setPraticien(data)
-      const principale = data.specialites.find((s: { principale: boolean }) => s.principale)
+      // Ces relations peuvent manquer selon l'inclusion côté API : on ne suppose rien.
+      const listeSpecialites: { specialite: string; principale: boolean }[] = data.specialites ?? []
+      const principale = listeSpecialites.find((s) => s.principale) ?? listeSpecialites[0]
+      const zones: string[] = data.zoneIntervention ?? []
       setForm({
-        nom: data.user.nom, prenom: data.user.prenom, telephone: data.user.telephone,
-        numeroOrdre: data.numeroOrdre || '', anneesExperience: data.anneesExperience,
-        bio: data.bio || '', zone: data.zoneIntervention.join(', '),
-        commission: data.commission, operateurMM: data.operateurMM || 'WAVE',
+        nom: data.user?.nom ?? '', prenom: data.user?.prenom ?? '', telephone: data.user?.telephone ?? '',
+        numeroOrdre: data.numeroOrdre || '', anneesExperience: data.anneesExperience ?? 0,
+        bio: data.bio || '', zone: zones.join(', '),
+        commission: data.commission ?? 10, operateurMM: data.operateurMM || 'WAVE',
         numeroMM: data.numeroMM || '', specialite: principale?.specialite || 'INFIRMIER',
       })
 

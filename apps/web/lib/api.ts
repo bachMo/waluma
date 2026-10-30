@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { poserCookieToken, effacerCookieToken } from '@/store/auth.store'
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
@@ -29,11 +30,15 @@ api.interceptors.response.use(
             { refreshToken }
           )
           localStorage.setItem('waluma_access_token', data.accessToken)
+          // Sans ça le middleware continue de voir un cookie périmé.
+          poserCookieToken(data.accessToken)
           error.config.headers.Authorization = `Bearer ${data.accessToken}`
           return axios(error.config)
         } catch {
           localStorage.removeItem('waluma_access_token')
           localStorage.removeItem('waluma_refresh_token')
+          localStorage.removeItem('waluma_user')
+          effacerCookieToken()
           window.location.href = '/login'
         }
       }
