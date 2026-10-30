@@ -104,7 +104,7 @@ export default function LandingPage() {
               {[
                 { val: '+500', label: 'Soins réalisés' },
                 { val: '4.9★', label: 'Note moyenne' },
-                { val: '< 30 min', label: 'Délai d'intervention' },
+                { val: '≤ 30 min', label: "Délai d'intervention" },
               ].map((s) => (
                 <div key={s.label} className="text-right">
                   <div className="text-[28px] font-extrabold text-white leading-none">{s.val}</div>
