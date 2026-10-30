@@ -16,6 +16,9 @@ declare global {
   }
 }
 
+/** Fenêtre typée comme dictionnaire pour les callbacks dynamiques */
+type WindowDict = Record<string, unknown>
+
 function loadGoogleMapsScript(apiKey: string, callbackName: string): Promise<void> {
   return new Promise((resolve, reject) => {
     // Déjà chargé
@@ -25,16 +28,15 @@ function loadGoogleMapsScript(apiKey: string, callbackName: string): Promise<voi
     }
     // Script déjà dans le DOM (en cours de chargement)
     if (document.querySelector('script[src*="maps.googleapis.com"]')) {
-      // Attendre que le callback soit appelé
-      const prev = window[callbackName as keyof Window] as (() => void) | undefined
-      ;(window as Window)[callbackName] = () => {
+      const prev = (window as unknown as WindowDict)[callbackName] as (() => void) | undefined
+      ;(window as unknown as WindowDict)[callbackName] = () => {
         prev?.()
         resolve()
       }
       return
     }
     // Injecter le script
-    ;(window as Window)[callbackName] = resolve
+    ;(window as unknown as WindowDict)[callbackName] = resolve
     const script = document.createElement('script')
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${callbackName}`
     script.async = true
