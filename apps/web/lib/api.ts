@@ -1,8 +1,12 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api',
-  headers: { 'Content-Type': 'application/json' },
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api',
+  headers: {
+    'Content-Type': 'application/json',
+    // Bypass l'interstitiel ngrok en production locale exposée via tunnel
+    'ngrok-skip-browser-warning': '1',
+  },
 })
 
 api.interceptors.request.use((config) => {
@@ -21,7 +25,7 @@ api.interceptors.response.use(
       if (refreshToken) {
         try {
           const { data } = await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/auth/refresh`,
+            `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5001/api'}/auth/refresh`,
             { refreshToken }
           )
           localStorage.setItem('waluma_access_token', data.accessToken)
