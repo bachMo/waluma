@@ -23,7 +23,22 @@ const httpServer = createServer(app)
 
 initSocket(httpServer)
 
-app.use(cors())
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3001',
+  'https://waluma.vercel.app',
+]
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true)
+    if (allowedOrigins.includes(origin)) return callback(null, true)
+    callback(new Error(`CORS bloqué pour l'origine : ${origin}`))
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}))
 app.use(express.json())
 
 app.get('/health', (_req, res) => {
